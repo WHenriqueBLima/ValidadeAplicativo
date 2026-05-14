@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1f2937" />
+  <title>ValidadeApp</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="stylesheet" href="styles.css?v=20260514-5" />
+</head>
+<body>
+  <div id="loginScreen" class="screen">
+    <div class="login-container">
+      <h1>ValidadeApp</h1>
+      <form id="loginForm">
+        <label>
+          Usuário
+          <input type="text" id="loginUsername" required />
+        </label>
+        <label>
+          Senha
+          <div class="password-field">
+            <input type="password" id="loginPassword" required />
+            <button type="button" id="togglePasswordButton" aria-label="Ver senha">Ver</button>
+          </div>
+        </label>
+        <button type="submit">Entrar</button>
+      </form>
+      <p id="loginError" class="error"></p>
+    </div>
+  </div>
+
+  <div id="appScreen" class="screen hidden">
+    <div class="app-shell">
+      <header>
+        <div>
+          <h1>ValidadeApp</h1>
+          <p>Controle de validades e produtos</p>
+        </div>
+        <div class="header-actions">
+          <button id="settingsButton" class="settings-button" type="button" aria-label="Abrir configurações" aria-expanded="false">⚙</button>
+          <div id="settingsMenu" class="settings-menu hidden">
+            <span id="currentUser"></span>
+            <span id="syncStatus" class="sync-status">Sync offline</span>
+            <button id="configureSyncButton" type="button">Configurar sincronização</button>
+            <button id="manageUsersButton" class="hidden" type="button">Gerenciar usuários</button>
+            <button id="logoutButton" type="button">Sair</button>
+          </div>
+        </div>
+      </header>
+
+      <nav class="tab-nav">
+        <button id="addTab" class="tab-button active">Adicionar</button>
+        <button id="viewTab" class="tab-button">Visualizar</button>
+        <button id="productsTab" class="tab-button hidden">Produtos</button>
+      </nav>
+
+      <main>
+        <div id="addSection" class="tab-content">
+          <section class="card">
+            <h2>Adicionar Validade</h2>
+            <form id="itemForm">
+              <label>
+                Nome do produto
+                <input type="text" id="itemName" list="productSuggestions" placeholder="Ex: Leite" autocomplete="off" required maxlength="40" />
+                <datalist id="productSuggestions"></datalist>
+                <span id="selectedProductHint" class="selected-product-hint hidden"></span>
+              </label>
+              <label>
+                Data de validade
+                <input type="date" id="itemDate" required />
+              </label>
+              <label>
+                Quantidade
+                <input type="number" id="itemQuantity" min="1" value="1" required />
+              </label>
+              <div class="form-actions">
+                <button type="submit">Salvar</button>
+                <button type="button" id="clearAll">Limpar campos</button>
+              </div>
+            </form>
+          </section>
+        </div>
+
+        <div id="viewSection" class="tab-content hidden">
+          <section class="card" id="summaryCard">
+            <h2>Resumo</h2>
+            <div class="summary-grid">
+              <div>
+                <strong id="totalItems">0</strong>
+                <span>Produtos</span>
+              </div>
+              <button type="button" id="urgentSummaryButton" class="summary-action">
+                <strong id="urgentCount">0</strong>
+                <span>Vence em até 20 dias</span>
+              </button>
+              <button type="button" id="criticalSummaryButton" class="summary-action">
+                <strong id="criticalCount">0</strong>
+                <span>Vence em até 10 dias</span>
+              </button>
+              <button type="button" id="expiredSummaryButton" class="summary-action">
+                <strong id="expiredCount">0</strong>
+                <span>Vencidos</span>
+              </button>
+              <button type="button" id="soldSummaryButton" class="summary-action">
+                <strong id="soldCount">0</strong>
+                <span>Saídas (30d)</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="card" id="listCard">
+            <div class="card-header">
+              <h2>Validades</h2>
+              <span id="sortHint">Clique no produto para ver detalhes</span>
+            </div>
+            <ul id="itemList" class="product-groups"></ul>
+          </section>
+        </div>
+
+        <div id="productsSection" class="tab-content hidden">
+          <section class="card">
+            <div class="card-header">
+              <h2>Produtos</h2>
+              <span>Editar ou excluir produtos</span>
+            </div>
+            <ul id="productManagementList" class="management-list"></ul>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div id="userManagementScreen" class="screen hidden">
+    <div class="app-shell">
+      <header>
+        <div>
+          <h1>Gerenciar Usuários</h1>
+          <p>Criar ou excluir usuários</p>
+        </div>
+        <button id="backToAppButton">Voltar</button>
+      </header>
+
+      <main>
+        <section class="card">
+          <h2>Criar novo usuário</h2>
+          <form id="createUserForm">
+            <label>
+              Nome de usuário
+              <input type="text" id="newUsername" required />
+            </label>
+            <label>
+              Senha
+              <input type="password" id="newPassword" required />
+            </label>
+            <label>
+              Tipo de conta
+              <select id="newUserType">
+                <option value="simple">Simples</option>
+                <option value="master">Mestre</option>
+              </select>
+            </label>
+            <button type="submit">Criar</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <h2>Usuários existentes</h2>
+          <ul id="userList" class="user-list"></ul>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <template id="itemTemplate">
+    <li class="item-row">
+      <div class="item-info">
+        <div class="item-details">
+          <p class="item-date"></p>
+          <div class="item-quantity-display">
+            <span>Qtd: </span>
+            <input type="number" class="quantity-input" min="1" />
+          </div>
+        </div>
+        <span class="item-status"></span>
+      </div>
+      <div class="item-actions">
+        <button class="save-quantity-button" title="Salvar quantidade">Salvar qtd</button>
+        <button class="sold-button" title="Marcar como saída">Marcar saída</button>
+        <button class="delete-button" title="Excluir">Excluir</button>
+      </div>
+    </li>
+  </template>
+
+  <template id="userTemplate">
+    <li class="user-row">
+      <div>
+        <strong class="user-name"></strong>
+        <span class="user-type"></span>
+      </div>
+      <button class="delete-user-button" aria-label="Excluir usuário">✕</button>
+    </li>
+  </template>
+
+  <script src="sync-config.js?v=20260514-5"></script>
+  <script src="app.js?v=20260514-5"></script>
+</body>
+</html>

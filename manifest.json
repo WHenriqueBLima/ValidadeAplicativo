@@ -1,0 +1,19 @@
+{
+  "name": "ValidadeApp",
+  "short_name": "Validade",
+  "description": "Armazene datas de validade e veja itens vencidos ou próximos de vencer.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#38bdf8",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

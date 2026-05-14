@@ -1,0 +1,16 @@
+# Local runtime data
+data.json
+backups/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Generated archives
+*.zip
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
