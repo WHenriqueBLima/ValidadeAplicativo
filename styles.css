@@ -25,7 +25,7 @@ body {
               linear-gradient(180deg, #0f172a 0%, #020617 100%);
 }
 
-button, input {
+button, input, select {
   font: inherit;
 }
 
@@ -182,10 +182,13 @@ input[readonly] {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .card-header span {
   color: #94a3b8;
+  overflow-wrap: anywhere;
 }
 
 .sheet-card .card-header {
@@ -206,9 +209,11 @@ input[readonly] {
 .sheet-scroll {
   width: 100%;
   max-width: 100%;
+  max-height: min(68vh, 620px);
   min-width: 0;
-  overflow-x: auto;
+  overflow: auto;
   overscroll-behavior-x: contain;
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 12px;
@@ -233,13 +238,29 @@ input[readonly] {
 }
 
 .monthly-sheet th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   background: #eeeeee;
   color: #111111;
   font-size: 0.76rem;
   text-transform: uppercase;
 }
 
+.monthly-sheet thead tr:nth-child(2) th {
+  top: 38px;
+}
+
+.monthly-sheet th:first-child {
+  left: 0;
+  z-index: 4;
+}
+
 .monthly-sheet .sheet-product-cell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #ffffff;
   width: 230px;
   text-align: left;
   font-weight: 700;
@@ -286,6 +307,7 @@ input[readonly] {
 .product-header {
   flex: 1;
   width: auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -457,6 +479,7 @@ input[readonly] {
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .item-details {
@@ -464,17 +487,20 @@ input[readonly] {
   flex-direction: column;
   gap: 6px;
   flex: 1;
+  min-width: 0;
 }
 
 .item-date {
   margin: 0;
   color: #94a3b8;
   font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
 .item-quantity-display {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   color: #cbd5e1;
   font-size: 0.9rem;
@@ -501,7 +527,10 @@ input[readonly] {
   padding: 4px 8px;
   border-radius: 6px;
   font-size: 0.75rem;
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .item-status.safe {
@@ -534,6 +563,7 @@ input[readonly] {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
 }
 
 .save-quantity-button,
@@ -574,50 +604,139 @@ input[readonly] {
 }
 
 @media (max-width: 680px) {
+  .app-shell {
+    padding: 14px 10px 28px;
+  }
+
+  .card {
+    border-radius: 18px;
+    padding: 16px;
+  }
+
+  .card h2 {
+    font-size: 1.55rem;
+    line-height: 1.1;
+  }
+
+  .card-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   .summary-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .summary-grid > div,
+  .summary-action {
+    border-radius: 16px;
+    padding: 14px;
+  }
+
+  .summary-grid strong {
+    font-size: 1.85rem;
   }
 
   header {
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 12px;
+  }
+
+  header h1 {
+    font-size: 2rem;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+
+  header p {
+    font-size: 0.95rem;
+    line-height: 1.3;
   }
 
   .header-actions {
-    align-self: flex-end;
+    align-self: end;
     flex-direction: row;
     align-items: center;
   }
 
   .tab-nav {
     margin-bottom: 16px;
+    border-radius: 14px;
   }
 
   .tab-button {
-    padding: 10px 12px;
-    font-size: 14px;
+    flex: 0 0 auto;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+  }
+
+  .quantity-field {
+    grid-template-columns: minmax(0, 1fr) 106px;
   }
 
   .item-row {
     align-items: stretch;
     flex-direction: column;
+    gap: 10px;
+    padding: 10px;
   }
 
   .item-info {
+    display: grid;
+    grid-template-columns: 1fr;
     align-items: flex-start;
+    gap: 10px;
+  }
+
+  .item-status {
+    justify-self: start;
+    width: auto;
+    max-width: 100%;
+    font-size: 0.86rem;
   }
 
   .item-actions {
     justify-content: flex-start;
   }
 
+  .save-quantity-button,
+  .sold-button,
+  .delete-button {
+    flex: 1 1 132px;
+    min-width: 0;
+    padding: 9px 10px;
+    text-align: center;
+    white-space: normal;
+  }
+
   .product-header-row {
     flex-direction: column;
+  }
+
+  .product-header {
+    align-items: flex-start;
+    padding: 12px 14px;
+  }
+
+  .product-info {
+    align-items: flex-start;
+  }
+
+  .product-name {
+    line-height: 1.2;
   }
 
   .product-admin-actions {
     flex-wrap: wrap;
     padding: 0 16px 12px;
+  }
+
+  .product-admin-button {
+    padding: 9px 12px;
   }
 
   .management-row {
@@ -632,6 +751,48 @@ input[readonly] {
   .sheet-card .card-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .sheet-scroll {
+    max-height: 62dvh;
+  }
+
+  .monthly-sheet {
+    min-width: 1040px;
+    font-size: 0.72rem;
+  }
+
+  .monthly-sheet th,
+  .monthly-sheet td {
+    padding: 6px;
+    height: 34px;
+  }
+}
+
+@media (max-width: 420px) {
+  .app-shell {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  .product-details {
+    padding: 8px;
+  }
+
+  .quantity-input {
+    width: 64px;
+  }
+
+  .quantity-unit-select {
+    width: 76px;
+  }
+
+  .sheet-scroll {
+    max-height: 58dvh;
   }
 }
 
@@ -790,6 +951,11 @@ input[readonly] {
 
 .tab-nav {
   display: flex;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   background: rgba(15, 23, 42, 0.7);
   border-radius: 16px;
   padding: 4px;
@@ -799,6 +965,7 @@ input[readonly] {
 
 .tab-button {
   flex: 1;
+  min-width: max-content;
   padding: 12px 16px;
   border: none;
   border-radius: 12px;

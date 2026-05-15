@@ -11,7 +11,7 @@ const SYNC_SERVER_KEY = 'validadeApp.syncServer';
 const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
 const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
 const SYNC_INTERVAL_MS = 5000;
-const APP_VERSION = '20260515-14';
+const APP_VERSION = '20260515-16';
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
