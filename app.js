@@ -38,7 +38,6 @@ const settingsButton = document.getElementById('settingsButton');
 const settingsMenu = document.getElementById('settingsMenu');
 const syncStatus = document.getElementById('syncStatus');
 const syncNowButton = document.getElementById('syncNowButton');
-const pullCloudButton = document.getElementById('pullCloudButton');
 const diagnoseSyncButton = document.getElementById('diagnoseSyncButton');
 const configureSyncButton = document.getElementById('configureSyncButton');
 const manageUsersButton = document.getElementById('manageUsersButton');
@@ -121,7 +120,6 @@ function setupEventListeners() {
   document.addEventListener('visibilitychange', handleVisibilitySync);
   window.addEventListener('online', handleVisibilitySync);
   syncNowButton.addEventListener('click', handleSyncNow);
-  pullCloudButton.addEventListener('click', handlePullCloud);
   diagnoseSyncButton.addEventListener('click', handleDiagnoseSync);
   configureSyncButton.addEventListener('click', handleConfigureSync);
   itemForm.addEventListener('submit', handleSaveItem);
@@ -542,34 +540,8 @@ async function handleSyncNow() {
   }
 
   updateSyncStatus('Sincronizando...');
-  await syncWithServer();
+  await syncWithServer({ force: true });
   updateSyncStatus();
-}
-
-async function handlePullCloud() {
-  if (!requestSyncAuthorization()) {
-    updateSyncStatus();
-    return;
-  }
-
-  if (!confirm('Baixar dados da nuvem e juntar com os dados locais deste aparelho?')) {
-    return;
-  }
-
-  updateSyncStatus('Juntando com a nuvem...');
-
-  try {
-    const remoteState = normalizeServerState(await fetchRemoteState());
-    const mergedState = mergeStates(remoteState, getAppState());
-    applyState(mergedState);
-    await postRemoteState(getAppState());
-    serverSyncAvailable = true;
-    refreshCurrentView();
-    updateSyncStatus();
-  } catch {
-    serverSyncAvailable = false;
-    updateSyncStatus('Falha ao baixar da nuvem');
-  }
 }
 
 function handleDiagnoseSync() {
@@ -761,7 +733,7 @@ async function canReachSyncServer() {
   }
 }
 
-async function syncWithServer() {
+async function syncWithServer(options = {}) {
   if (isSyncingWithServer) {
     pendingSharedSave = true;
     return;
@@ -778,7 +750,7 @@ async function syncWithServer() {
     const localState = getAppState();
     const mergedState = mergeStates(serverState, localState);
 
-    if (hasUsefulState(mergedState)) {
+    if (options.force || hasUsefulState(mergedState)) {
       applyState(mergedState);
       await postRemoteState(getAppState());
       refreshCurrentView();
