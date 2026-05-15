@@ -1019,10 +1019,9 @@ function renderMonthlySheet() {
     for (let index = 0; index < 4; index += 1) {
       const item = productItems[index];
       if (item) {
-        const status = getStatus(item, getDaysRemaining(item.date));
         appendSheetCell(row, formatDate(item.date));
         appendSheetCell(row, item.quantity ?? 1, 'sheet-quantity-cell');
-        appendSheetCell(row, status.label, `sheet-status-cell ${status.css}`);
+        appendSheetCell(row, '', 'sheet-status-cell');
       } else {
         appendSheetCell(row, '');
         appendSheetCell(row, '', 'sheet-quantity-cell');

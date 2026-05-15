@@ -235,23 +235,7 @@ input[readonly] {
 
 .monthly-sheet .sheet-status-cell {
   width: 118px;
-  font-weight: 700;
-  color: #111111;
-}
-
-.monthly-sheet .sheet-status-cell.safe {
-  font-weight: 600;
-}
-
-.monthly-sheet .sheet-status-cell.urgent {
-  background: #f2f2f2;
-}
-
-.monthly-sheet .sheet-status-cell.critical,
-.monthly-sheet .sheet-status-cell.expired {
-  background: #dddddd;
-  border-width: 2px;
-  text-transform: uppercase;
+  background: #ffffff;
 }
 
 .monthly-sheet .sheet-notes-cell {
