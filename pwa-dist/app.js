@@ -7,7 +7,7 @@ const DELETED_PRODUCTS_KEY = 'validadeApp.deletedProducts';
 const CURRENT_USER_KEY = 'validadeApp.currentUser';
 const SYNC_SERVER_KEY = 'validadeApp.syncServer';
 const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
-const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v3';
+const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
 const SYNC_INTERVAL_MS = 5000;
 
 const loginScreen = document.getElementById('loginScreen');
@@ -439,7 +439,7 @@ function getStateUrl(server) {
 function getSyncConfig() {
   const fileConfig = window.VALIDADEAPP_SYNC || {};
   const savedConfig = loadSavedSyncConfig();
-  const config = savedConfig || fileConfig;
+  const config = hasCompleteSupabaseConfig(fileConfig) ? fileConfig : (savedConfig || fileConfig);
   return {
     provider: (config.provider || '').trim().toLowerCase(),
     supabaseUrl: (config.supabaseUrl || '').trim().replace(/\/$/, ''),
@@ -447,6 +447,14 @@ function getSyncConfig() {
     table: (config.table || 'app_state').trim(),
     rowId: (config.rowId || 'validadeapp').trim(),
   };
+}
+
+function hasCompleteSupabaseConfig(config) {
+  return (config.provider || '').trim().toLowerCase() === 'supabase'
+    && Boolean((config.supabaseUrl || '').trim())
+    && Boolean((config.supabaseAnonKey || '').trim())
+    && Boolean((config.table || 'app_state').trim())
+    && Boolean((config.rowId || 'validadeapp').trim());
 }
 
 function loadSavedSyncConfig() {
@@ -479,8 +487,14 @@ function getSyncLabel() {
 function updateSyncStatus(message) {
   if (!syncStatus) return;
 
-  syncStatus.textContent = message || (serverSyncAvailable ? `Sync online: ${getSyncLabel()}` : 'Sync offline');
+  syncStatus.textContent = message || getSyncStatusText();
   syncStatus.classList.toggle('online', serverSyncAvailable);
+}
+
+function getSyncStatusText() {
+  if (serverSyncAvailable) return `Sync online: ${getSyncLabel()}`;
+  if (hasSupabaseSync() && !isSyncAuthorized()) return 'Sync aguardando autorização';
+  return 'Sync offline';
 }
 
 async function handleConfigureSync() {
