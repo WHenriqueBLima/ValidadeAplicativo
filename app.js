@@ -38,6 +38,7 @@ const settingsButton = document.getElementById('settingsButton');
 const settingsMenu = document.getElementById('settingsMenu');
 const syncStatus = document.getElementById('syncStatus');
 const syncNowButton = document.getElementById('syncNowButton');
+const pullCloudButton = document.getElementById('pullCloudButton');
 const configureSyncButton = document.getElementById('configureSyncButton');
 const manageUsersButton = document.getElementById('manageUsersButton');
 const logoutButton = document.getElementById('logoutButton');
@@ -119,6 +120,7 @@ function setupEventListeners() {
   document.addEventListener('visibilitychange', handleVisibilitySync);
   window.addEventListener('online', handleVisibilitySync);
   syncNowButton.addEventListener('click', handleSyncNow);
+  pullCloudButton.addEventListener('click', handlePullCloud);
   configureSyncButton.addEventListener('click', handleConfigureSync);
   itemForm.addEventListener('submit', handleSaveItem);
   createUserForm.addEventListener('submit', handleCreateUser);
@@ -540,6 +542,30 @@ async function handleSyncNow() {
   updateSyncStatus('Sincronizando...');
   await syncWithServer();
   updateSyncStatus();
+}
+
+async function handlePullCloud() {
+  if (!requestSyncAuthorization()) {
+    updateSyncStatus();
+    return;
+  }
+
+  if (!confirm('Baixar dados da nuvem e substituir os dados locais deste aparelho?')) {
+    return;
+  }
+
+  updateSyncStatus('Baixando da nuvem...');
+
+  try {
+    const remoteState = normalizeServerState(await fetchRemoteState());
+    applyState(remoteState);
+    serverSyncAvailable = true;
+    refreshCurrentView();
+    updateSyncStatus();
+  } catch {
+    serverSyncAvailable = false;
+    updateSyncStatus('Falha ao baixar da nuvem');
+  }
 }
 
 function normalizeServerState(serverState) {
