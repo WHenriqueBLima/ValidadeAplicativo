@@ -67,6 +67,8 @@ let currentUserData = null;
 let activeAlertFilter = null;
 let serverSyncAvailable = false;
 let isApplyingRemoteState = false;
+let isSyncingWithServer = false;
+let pendingSharedSave = false;
 let syncIntervalId = null;
 let expandedProductKeys = new Set();
 
@@ -635,6 +637,13 @@ async function canReachSyncServer() {
 }
 
 async function syncWithServer() {
+  if (isSyncingWithServer) {
+    pendingSharedSave = true;
+    return;
+  }
+
+  isSyncingWithServer = true;
+
   try {
     const rawServerState = await fetchRemoteState();
     if (!rawServerState) return;
@@ -653,13 +662,45 @@ async function syncWithServer() {
   } catch {
     serverSyncAvailable = false;
     updateSyncStatus();
+  } finally {
+    isSyncingWithServer = false;
+
+    if (pendingSharedSave) {
+      pendingSharedSave = false;
+      await saveSharedState();
+    }
   }
 }
 
 async function saveSharedState() {
   if (!serverSyncAvailable || isApplyingRemoteState) return;
 
-  await postRemoteState(getAppState());
+  if (isSyncingWithServer) {
+    pendingSharedSave = true;
+    return;
+  }
+
+  isSyncingWithServer = true;
+
+  try {
+    const rawServerState = await fetchRemoteState();
+    const serverState = normalizeServerState(rawServerState);
+    const mergedState = mergeStates(serverState, getAppState());
+
+    applyState(mergedState);
+    await postRemoteState(getAppState());
+    refreshCurrentView();
+  } catch {
+    serverSyncAvailable = false;
+    updateSyncStatus();
+  } finally {
+    isSyncingWithServer = false;
+
+    if (pendingSharedSave) {
+      pendingSharedSave = false;
+      await saveSharedState();
+    }
+  }
 }
 
 async function fetchRemoteState() {
