@@ -115,6 +115,8 @@ function setupEventListeners() {
   togglePasswordButton.addEventListener('click', togglePasswordVisibility);
   settingsButton.addEventListener('click', toggleSettingsMenu);
   document.addEventListener('click', closeSettingsMenuOnOutsideClick);
+  document.addEventListener('visibilitychange', handleVisibilitySync);
+  window.addEventListener('online', handleVisibilitySync);
   configureSyncButton.addEventListener('click', handleConfigureSync);
   itemForm.addEventListener('submit', handleSaveItem);
   createUserForm.addEventListener('submit', handleCreateUser);
@@ -134,6 +136,12 @@ function setupEventListeners() {
   criticalSummaryButton.addEventListener('click', () => expandProductsByAlert('critical'));
   expiredSummaryButton.addEventListener('click', () => expandProductsByAlert('expired'));
   soldSummaryButton.addEventListener('click', () => expandProductsByAlert('sold'));
+}
+
+function handleVisibilitySync() {
+  if (document.visibilityState === 'hidden') return;
+  if (!currentUserData || !isSyncAuthorized()) return;
+  syncWithServer();
 }
 
 function registerServiceWorker() {
@@ -630,7 +638,8 @@ async function setupAutoSync() {
 
 async function canReachSyncServer() {
   try {
-    return Boolean(await fetchRemoteState());
+    await fetchRemoteState();
+    return true;
   } catch {
     return false;
   }
@@ -646,7 +655,6 @@ async function syncWithServer() {
 
   try {
     const rawServerState = await fetchRemoteState();
-    if (!rawServerState) return;
     const serverState = normalizeServerState(rawServerState);
 
     serverSyncAvailable = true;
@@ -656,7 +664,7 @@ async function syncWithServer() {
 
     if (hasUsefulState(mergedState)) {
       applyState(mergedState);
-      saveSharedState();
+      await postRemoteState(getAppState());
       refreshCurrentView();
     }
   } catch {
