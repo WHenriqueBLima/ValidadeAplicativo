@@ -37,6 +37,7 @@ const currentUser = document.getElementById('currentUser');
 const settingsButton = document.getElementById('settingsButton');
 const settingsMenu = document.getElementById('settingsMenu');
 const syncStatus = document.getElementById('syncStatus');
+const syncNowButton = document.getElementById('syncNowButton');
 const configureSyncButton = document.getElementById('configureSyncButton');
 const manageUsersButton = document.getElementById('manageUsersButton');
 const logoutButton = document.getElementById('logoutButton');
@@ -117,6 +118,7 @@ function setupEventListeners() {
   document.addEventListener('click', closeSettingsMenuOnOutsideClick);
   document.addEventListener('visibilitychange', handleVisibilitySync);
   window.addEventListener('online', handleVisibilitySync);
+  syncNowButton.addEventListener('click', handleSyncNow);
   configureSyncButton.addEventListener('click', handleConfigureSync);
   itemForm.addEventListener('submit', handleSaveItem);
   createUserForm.addEventListener('submit', handleCreateUser);
@@ -529,6 +531,17 @@ async function handleConfigureSync() {
   closeSettingsMenu();
 }
 
+async function handleSyncNow() {
+  if (!requestSyncAuthorization()) {
+    updateSyncStatus();
+    return;
+  }
+
+  updateSyncStatus('Sincronizando...');
+  await syncWithServer();
+  updateSyncStatus();
+}
+
 function normalizeServerState(serverState) {
   if (!serverState || serverState.encrypted) {
     return {
@@ -695,7 +708,8 @@ async function syncWithServer() {
 }
 
 async function saveSharedState() {
-  if (!serverSyncAvailable || isApplyingRemoteState) return;
+  if (isApplyingRemoteState) return;
+  if (!serverSyncAvailable && !hasSupabaseSync()) return;
 
   if (isSyncingWithServer) {
     pendingSharedSave = true;
@@ -709,6 +723,7 @@ async function saveSharedState() {
     const serverState = normalizeServerState(rawServerState);
     const mergedState = mergeStates(serverState, getAppState());
 
+    serverSyncAvailable = true;
     applyState(mergedState);
     await postRemoteState(getAppState());
     refreshCurrentView();
