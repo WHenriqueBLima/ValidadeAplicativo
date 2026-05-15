@@ -39,6 +39,7 @@ const settingsMenu = document.getElementById('settingsMenu');
 const syncStatus = document.getElementById('syncStatus');
 const syncNowButton = document.getElementById('syncNowButton');
 const pullCloudButton = document.getElementById('pullCloudButton');
+const diagnoseSyncButton = document.getElementById('diagnoseSyncButton');
 const configureSyncButton = document.getElementById('configureSyncButton');
 const manageUsersButton = document.getElementById('manageUsersButton');
 const logoutButton = document.getElementById('logoutButton');
@@ -121,6 +122,7 @@ function setupEventListeners() {
   window.addEventListener('online', handleVisibilitySync);
   syncNowButton.addEventListener('click', handleSyncNow);
   pullCloudButton.addEventListener('click', handlePullCloud);
+  diagnoseSyncButton.addEventListener('click', handleDiagnoseSync);
   configureSyncButton.addEventListener('click', handleConfigureSync);
   itemForm.addEventListener('submit', handleSaveItem);
   createUserForm.addEventListener('submit', handleCreateUser);
@@ -568,6 +570,18 @@ async function handlePullCloud() {
   }
 }
 
+function handleDiagnoseSync() {
+  const productList = getProductNames();
+  const lines = [
+    `Status: ${getSyncStatusText()}`,
+    `Produtos neste aparelho: ${productList.length}`,
+    '',
+    ...productList.map((productName, index) => `${index + 1}. ${productName}`),
+  ];
+
+  alert(lines.join('\n'));
+}
+
 function normalizeServerState(serverState) {
   if (!serverState || serverState.encrypted) {
     return {
@@ -661,6 +675,7 @@ function applyState(state) {
   history = Array.isArray(state.history) ? state.history : [];
   deletedItemIds = new Set(Array.isArray(state.deletedItemIds) ? state.deletedItemIds : []);
   deletedProductKeys = new Set(Array.isArray(state.deletedProductKeys) ? state.deletedProductKeys : []);
+  rebuildProductCatalog();
   persistLocalState();
   isApplyingRemoteState = false;
 }
@@ -962,10 +977,22 @@ function syncProductsFromItems() {
   }
 }
 
+function rebuildProductCatalog() {
+  const rebuiltProducts = mergeProducts(
+    products,
+    items.map(item => item.name),
+    deletedProductKeys
+  );
+
+  if (JSON.stringify(rebuiltProducts) !== JSON.stringify(products)) {
+    products = rebuiltProducts;
+  }
+}
+
 function getProductNames() {
   const productsByKey = new Map();
 
-  syncProductsFromItems();
+  rebuildProductCatalog();
 
   for (const product of products) {
     const name = normalizeProductName(product);
