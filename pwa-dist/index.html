@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icon.svg" />
-  <link rel="stylesheet" href="styles.css?v=20260515-12" />
+  <link rel="stylesheet" href="styles.css?v=20260515-14" />
 </head>
 <body>
   <div id="loginScreen" class="screen">
@@ -77,7 +77,13 @@
               </label>
               <label>
                 Quantidade
-                <input type="number" id="itemQuantity" min="1" value="1" required />
+                <div class="quantity-field">
+                  <input type="number" id="itemQuantity" min="0.001" step="0.001" value="1" required />
+                  <select id="itemQuantityUnit" aria-label="Unidade da quantidade">
+                    <option value="un">Unidade</option>
+                    <option value="kg">Quilo</option>
+                  </select>
+                </div>
               </label>
               <div class="form-actions">
                 <button type="submit">Salvar</button>
@@ -225,7 +231,11 @@
           <p class="item-date"></p>
           <div class="item-quantity-display">
             <span>Qtd: </span>
-            <input type="number" class="quantity-input" min="1" />
+            <input type="number" class="quantity-input" min="0.001" step="0.001" />
+            <select class="quantity-unit-select" aria-label="Unidade da quantidade">
+              <option value="un">Un</option>
+              <option value="kg">Kg</option>
+            </select>
           </div>
         </div>
         <span class="item-status"></span>
@@ -248,7 +258,7 @@
     </li>
   </template>
 
-  <script src="sync-config.js?v=20260515-12"></script>
-  <script src="app.js?v=20260515-12"></script>
+  <script src="sync-config.js?v=20260515-14"></script>
+  <script src="app.js?v=20260515-14"></script>
 </body>
 </html>

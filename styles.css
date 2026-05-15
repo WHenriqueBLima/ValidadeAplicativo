@@ -99,13 +99,20 @@ label {
 
 input[type="text"],
 input[type="date"],
-input[type="number"] {
+input[type="number"],
+select {
   width: 100%;
   padding: 14px 14px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 16px;
   background: rgba(15, 23, 42, 0.96);
   color: #e2e8f0;
+}
+
+.quantity-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 10px;
 }
 
 input[readonly] {
@@ -240,7 +247,7 @@ input[readonly] {
 }
 
 .monthly-sheet .sheet-quantity-cell {
-  width: 46px;
+  width: 72px;
 }
 
 .monthly-sheet .sheet-status-cell {
@@ -480,6 +487,13 @@ input[readonly] {
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.96);
   color: #e2e8f0;
+  font-size: 0.9rem;
+}
+
+.quantity-unit-select {
+  width: 72px;
+  padding: 4px 6px;
+  border-radius: 6px;
   font-size: 0.9rem;
 }
 

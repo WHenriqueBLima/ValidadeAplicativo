@@ -14,6 +14,8 @@ DEFAULT_STATE = {
     "history": [],
     "deletedItemIds": [],
     "deletedProductKeys": [],
+    "restoredProductKeys": [],
+    "productChanges": {},
 }
 
 
@@ -59,6 +61,8 @@ class ValidadeHandler(SimpleHTTPRequestHandler):
             "history": state.get("history", []),
             "deletedItemIds": state.get("deletedItemIds", []),
             "deletedProductKeys": state.get("deletedProductKeys", []),
+            "restoredProductKeys": state.get("restoredProductKeys", []),
+            "productChanges": state.get("productChanges", {}),
         }
         save_state(cleaned)
         self.send_json({"ok": True})

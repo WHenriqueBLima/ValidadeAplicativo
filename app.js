@@ -4,12 +4,14 @@ const USERS_KEY = 'validadeApp.users';
 const HISTORY_KEY = 'validadeApp.history';
 const DELETED_ITEMS_KEY = 'validadeApp.deletedItems';
 const DELETED_PRODUCTS_KEY = 'validadeApp.deletedProducts';
+const RESTORED_PRODUCTS_KEY = 'validadeApp.restoredProducts';
+const PRODUCT_CHANGES_KEY = 'validadeApp.productChanges';
 const CURRENT_USER_KEY = 'validadeApp.currentUser';
 const SYNC_SERVER_KEY = 'validadeApp.syncServer';
 const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
 const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
 const SYNC_INTERVAL_MS = 5000;
-const APP_VERSION = '20260515-12';
+const APP_VERSION = '20260515-14';
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -44,6 +46,7 @@ const configureSyncButton = document.getElementById('configureSyncButton');
 const manageUsersButton = document.getElementById('manageUsersButton');
 const logoutButton = document.getElementById('logoutButton');
 const togglePasswordButton = document.getElementById('togglePasswordButton');
+const clearAllButton = document.getElementById('clearAll');
 const backToAppButton = document.getElementById('backToAppButton');
 const addTab = document.getElementById('addTab');
 const viewTab = document.getElementById('viewTab');
@@ -66,12 +69,15 @@ let users = loadUsers();
 let history = loadHistory();
 let deletedItemIds = loadDeletedSet(DELETED_ITEMS_KEY);
 let deletedProductKeys = loadDeletedSet(DELETED_PRODUCTS_KEY);
+let restoredProductKeys = loadDeletedSet(RESTORED_PRODUCTS_KEY);
+let productChanges = loadProductChanges();
 let currentUserData = null;
 let activeAlertFilter = null;
 let serverSyncAvailable = false;
 let isApplyingRemoteState = false;
 let isSyncingWithServer = false;
 let pendingSharedSave = false;
+let syncDeniedForSession = false;
 let syncIntervalId = null;
 let syncSaveTimeoutId = null;
 let expandedProductKeys = new Set();
@@ -129,7 +135,7 @@ function setupEventListeners() {
   logoutButton.addEventListener('click', handleLogout);
   manageUsersButton.addEventListener('click', showUserManagement);
   backToAppButton.addEventListener('click', showApp);
-  clearAll.addEventListener('click', handleClearAll);
+  clearAllButton.addEventListener('click', handleClearAll);
   addTab.addEventListener('click', () => switchTab('add'));
   viewTab.addEventListener('click', () => {
     activeAlertFilter = null;
@@ -320,6 +326,7 @@ function handleCreateUser(event) {
 function handleClearAll() {
   itemForm.reset();
   document.getElementById('itemQuantity').value = '1';
+  document.getElementById('itemQuantityUnit').value = 'un';
   clearSelectedProductHint();
   document.getElementById('itemName').focus();
 }
@@ -413,9 +420,20 @@ function loadDeletedSet(key) {
   }
 }
 
+function loadProductChanges() {
+  try {
+    const raw = localStorage.getItem(PRODUCT_CHANGES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
 function saveDeletedState() {
   localStorage.setItem(DELETED_ITEMS_KEY, JSON.stringify([...deletedItemIds]));
   localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify([...deletedProductKeys]));
+  localStorage.setItem(RESTORED_PRODUCTS_KEY, JSON.stringify([...restoredProductKeys]));
+  localStorage.setItem(PRODUCT_CHANGES_KEY, JSON.stringify(productChanges));
   scheduleSharedStateSave();
 }
 
@@ -427,6 +445,8 @@ function getAppState() {
     history,
     deletedItemIds: [...deletedItemIds],
     deletedProductKeys: [...deletedProductKeys],
+    restoredProductKeys: [...restoredProductKeys],
+    productChanges,
   };
 }
 
@@ -526,6 +546,7 @@ async function handleConfigureSync() {
   };
 
   saveSyncConfig(nextConfig);
+  syncDeniedForSession = false;
   serverSyncAvailable = false;
   stopAutoSync();
   updateSyncStatus('Conectando...');
@@ -536,7 +557,7 @@ async function handleConfigureSync() {
 }
 
 async function handleSyncNow() {
-  if (!requestSyncAuthorization()) {
+  if (!requestSyncAuthorization({ forcePrompt: true })) {
     updateSyncStatus();
     return;
   }
@@ -578,6 +599,8 @@ function normalizeServerState(serverState) {
     history: Array.isArray(serverState.history) ? serverState.history : [],
     deletedItemIds: Array.isArray(serverState.deletedItemIds) ? serverState.deletedItemIds : [],
     deletedProductKeys: Array.isArray(serverState.deletedProductKeys) ? serverState.deletedProductKeys : [],
+    restoredProductKeys: Array.isArray(serverState.restoredProductKeys) ? serverState.restoredProductKeys : [],
+    productChanges: serverState.productChanges && typeof serverState.productChanges === 'object' ? serverState.productChanges : {},
   };
 }
 
@@ -588,6 +611,8 @@ function persistLocalState() {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
   localStorage.setItem(DELETED_ITEMS_KEY, JSON.stringify([...deletedItemIds]));
   localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify([...deletedProductKeys]));
+  localStorage.setItem(RESTORED_PRODUCTS_KEY, JSON.stringify([...restoredProductKeys]));
+  localStorage.setItem(PRODUCT_CHANGES_KEY, JSON.stringify(productChanges));
 }
 
 function hasUsefulState(state) {
@@ -625,7 +650,8 @@ function mergeItems(serverItems = [], localItems = [], deletedIds = new Set(), d
     const normalizedItem = {
       ...item,
       name: normalizedName,
-      quantity: Number(item.quantity) || 1,
+      quantity: normalizeQuantity(item.quantity),
+      quantityUnit: normalizeQuantityUnit(item.quantityUnit),
       sold: Boolean(item.sold),
     };
     const signature = getItemSignature(normalizedItem);
@@ -643,7 +669,8 @@ function getItemSignature(item) {
   return [
     getProductKey(item.name || ''),
     item.date || '',
-    String(Number(item.quantity) || 1),
+    String(normalizeQuantity(item.quantity)),
+    normalizeQuantityUnit(item.quantityUnit),
     item.sold ? 'sold' : 'active',
     item.soldDate || '',
   ].join('|');
@@ -671,9 +698,47 @@ function mergeProducts(serverProducts = [], localProducts = [], deletedProducts 
   return [...merged.values()];
 }
 
+function mergeProductChanges(serverChanges = {}, localChanges = {}) {
+  const merged = {};
+
+  for (const changes of [serverChanges, localChanges]) {
+    for (const [productKey, change] of Object.entries(changes || {})) {
+      if (!productKey || !change || !change.status) continue;
+      const existing = merged[productKey];
+      if (!existing || getProductChangeTimestamp(change) >= getProductChangeTimestamp(existing)) {
+        merged[productKey] = change;
+      }
+    }
+  }
+
+  return merged;
+}
+
+function getProductChangeTimestamp(change) {
+  return Date.parse(change?.timestamp) || 0;
+}
+
+function markProductChanged(productKey, status) {
+  productChanges[productKey] = {
+    status,
+    timestamp: new Date().toISOString(),
+  };
+}
+
 function mergeStates(serverState, localState) {
   const mergedDeletedItemIds = mergeDeletedSet(serverState.deletedItemIds, localState.deletedItemIds);
   const mergedDeletedProductKeys = mergeDeletedSet(serverState.deletedProductKeys, localState.deletedProductKeys);
+  const mergedProductChanges = mergeProductChanges(serverState.productChanges, localState.productChanges);
+
+  for (const [productKey, change] of Object.entries(mergedProductChanges)) {
+    if (change.status === 'restored') {
+      mergedDeletedProductKeys.delete(productKey);
+    }
+    if (change.status === 'deleted') {
+      mergedDeletedProductKeys.add(productKey);
+    }
+  }
+
   const mergedItems = mergeItems(serverState.items, localState.items, mergedDeletedItemIds, mergedDeletedProductKeys);
 
   return {
@@ -687,6 +752,8 @@ function mergeStates(serverState, localState) {
     history: mergeById(serverState.history, localState.history),
     deletedItemIds: [...mergedDeletedItemIds],
     deletedProductKeys: [...mergedDeletedProductKeys],
+    restoredProductKeys: Array.from(new Set([...(serverState.restoredProductKeys || []), ...(localState.restoredProductKeys || [])])),
+    productChanges: mergedProductChanges,
   };
 }
 
@@ -698,6 +765,8 @@ function applyState(state) {
   history = Array.isArray(state.history) ? state.history : [];
   deletedItemIds = new Set(Array.isArray(state.deletedItemIds) ? state.deletedItemIds : []);
   deletedProductKeys = new Set(Array.isArray(state.deletedProductKeys) ? state.deletedProductKeys : []);
+  restoredProductKeys = new Set(Array.isArray(state.restoredProductKeys) ? state.restoredProductKeys : []);
+  productChanges = state.productChanges && typeof state.productChanges === 'object' ? state.productChanges : {};
   rebuildProductCatalog();
   persistLocalState();
   isApplyingRemoteState = false;
@@ -707,12 +776,20 @@ function isSyncAuthorized() {
   return localStorage.getItem(SYNC_AUTH_KEY) === 'allowed';
 }
 
-function requestSyncAuthorization() {
+function requestSyncAuthorization(options = {}) {
+  const forcePrompt = Boolean(options.forcePrompt);
   const savedChoice = localStorage.getItem(SYNC_AUTH_KEY);
-  if (savedChoice) return savedChoice === 'allowed';
+  if (savedChoice === 'allowed') return true;
+  if (syncDeniedForSession && !forcePrompt) return false;
 
   const allow = confirm(`Ativar sincronização automática com ${getSyncLabel()}? Esta autorização será salva neste aparelho.`);
-  localStorage.setItem(SYNC_AUTH_KEY, allow ? 'allowed' : 'denied');
+  if (allow) {
+    localStorage.setItem(SYNC_AUTH_KEY, 'allowed');
+    syncDeniedForSession = false;
+  } else {
+    localStorage.removeItem(SYNC_AUTH_KEY);
+    syncDeniedForSession = true;
+  }
   return allow;
 }
 
@@ -986,6 +1063,25 @@ function normalizeProductName(name) {
   return name.trim().replace(/\s+/g, ' ');
 }
 
+function normalizeQuantityUnit(unit) {
+  return unit === 'kg' ? 'kg' : 'un';
+}
+
+function normalizeQuantity(quantity) {
+  const value = Number(quantity);
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+function formatQuantity(quantity, unit = 'un') {
+  const normalizedUnit = normalizeQuantityUnit(unit);
+  const value = normalizeQuantity(quantity);
+  const formattedValue = new Intl.NumberFormat('pt-BR', {
+    maximumFractionDigits: 3,
+  }).format(value);
+
+  return `${formattedValue} ${normalizedUnit === 'kg' ? 'kg' : 'un.'}`;
+}
+
 function getExistingProductName(name) {
   const productKey = getProductKey(name);
   if (deletedProductKeys.has(productKey)) return null;
@@ -995,7 +1091,10 @@ function getExistingProductName(name) {
 function ensureProduct(name) {
   const normalizedName = normalizeProductName(name);
   if (!normalizedName) return null;
-  deletedProductKeys.delete(getProductKey(normalizedName));
+  const productKey = getProductKey(normalizedName);
+  deletedProductKeys.delete(productKey);
+  restoredProductKeys.add(productKey);
+  markProductChanged(productKey, 'restored');
 
   const existingName = getExistingProductName(normalizedName);
   if (existingName) return existingName;
@@ -1085,12 +1184,14 @@ function handleSaveItem(event) {
   const nameInput = document.getElementById('itemName');
   const dateInput = document.getElementById('itemDate');
   const quantityInput = document.getElementById('itemQuantity');
+  const quantityUnitInput = document.getElementById('itemQuantityUnit');
   const typedName = normalizeProductName(nameInput.value);
   const name = ensureProduct(getExistingProductName(typedName) || typedName);
   const date = dateInput.value;
-  const quantity = Number(quantityInput.value) || 1;
+  const quantity = Number(quantityInput.value);
+  const quantityUnit = normalizeQuantityUnit(quantityUnitInput.value);
 
-  if (!name || !date || quantity < 1) {
+  if (!name || !date || quantity <= 0) {
     alert('Por favor, preencha todos os campos corretamente.');
     return;
   }
@@ -1100,6 +1201,7 @@ function handleSaveItem(event) {
     name,
     date,
     quantity,
+    quantityUnit,
     sold: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -1108,6 +1210,7 @@ function handleSaveItem(event) {
   nameInput.value = '';
   dateInput.value = '';
   quantityInput.value = '1';
+  quantityUnitInput.value = 'un';
   clearSelectedProductHint();
   saveItems();
   renderProductSuggestions();
@@ -1118,15 +1221,24 @@ function handleSaveItem(event) {
 }
 
 function formatDate(dateString) {
-  const date = new Date(dateString);
+  const date = parseLocalDate(dateString);
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function getDaysRemaining(dateString) {
   const now = new Date();
-  const target = new Date(dateString);
+  const target = parseLocalDate(dateString);
   const diff = target.setHours(0, 0, 0, 0) - now.setHours(0, 0, 0, 0);
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+function parseLocalDate(dateString) {
+  const [year, month, day] = String(dateString || '').split('-').map(Number);
+  if (year && month && day) {
+    return new Date(year, month - 1, day);
+  }
+
+  return new Date(dateString);
 }
 
 function getDaysSinceSold(item) {
@@ -1209,7 +1321,7 @@ function renderMonthlySheet() {
       const item = productItems[index];
       if (item) {
         appendSheetCell(row, formatDate(item.date));
-        appendSheetCell(row, item.quantity ?? 1, 'sheet-quantity-cell');
+        appendSheetCell(row, formatQuantity(item.quantity, item.quantityUnit), 'sheet-quantity-cell');
         appendSheetCell(row, '', 'sheet-status-cell');
       } else {
         appendSheetCell(row, '');
@@ -1228,15 +1340,15 @@ function getSheetNotes(productItems) {
 
   for (const item of productItems) {
     const days = getDaysRemaining(item.date);
-    const quantity = item.quantity ?? 1;
+    const quantity = formatQuantity(item.quantity, item.quantityUnit);
     const date = formatDate(item.date);
 
     if (days < 0) {
-      notes.push(`Vencido: ${quantity} un. em ${date}`);
+      notes.push(`Vencido: ${quantity} em ${date}`);
     } else if (days <= 10) {
-      notes.push(`Muito próximo: ${quantity} un. em ${date}`);
+      notes.push(`Muito próximo: ${quantity} em ${date}`);
     } else if (days <= 20) {
-      notes.push(`Atenção: ${quantity} un. em ${date}`);
+      notes.push(`Atenção: ${quantity} em ${date}`);
     }
   }
 
@@ -1372,7 +1484,9 @@ function renderItems() {
       itemDate.textContent = `Validade: ${formatDate(item.date)}`;
 
       const quantityInput = clone.querySelector('.quantity-input');
-      quantityInput.value = item.quantity ?? 1;
+      quantityInput.value = normalizeQuantity(item.quantity);
+      const quantityUnitSelect = clone.querySelector('.quantity-unit-select');
+      quantityUnitSelect.value = normalizeQuantityUnit(item.quantityUnit);
 
       const statusEl = clone.querySelector('.item-status');
       statusEl.textContent = status.label;
@@ -1380,7 +1494,7 @@ function renderItems() {
 
       // Save quantity button
       const saveQtyBtn = clone.querySelector('.save-quantity-button');
-      saveQtyBtn.addEventListener('click', () => saveQuantity(item.id, quantityInput, item));
+      saveQtyBtn.addEventListener('click', () => saveQuantity(item.id, quantityInput, quantityUnitSelect, item));
 
       // Sold button
       const soldButton = clone.querySelector('.sold-button');
@@ -1439,24 +1553,27 @@ function markSold(id) {
   addHistoryEntry(`Item "${item.name}" marcado como vendido por ${currentUserData.username}`);
 }
 
-function saveQuantity(id, input, item) {
+function saveQuantity(id, input, unitInput, item) {
   const newQuantity = Number(input.value);
+  const newQuantityUnit = normalizeQuantityUnit(unitInput.value);
   
-  if (!newQuantity || newQuantity < 1) {
+  if (!newQuantity || newQuantity <= 0) {
     alert('Quantidade deve ser maior que zero.');
-    input.value = item.quantity ?? 1;
+    input.value = normalizeQuantity(item.quantity);
+    unitInput.value = normalizeQuantityUnit(item.quantityUnit);
     return;
   }
 
   items = items.map(entry => entry.id === id ? {
     ...entry,
     quantity: newQuantity,
+    quantityUnit: newQuantityUnit,
     updatedAt: new Date().toISOString(),
   } : entry);
 
   saveItems();
   renderItems();
-  addHistoryEntry(`Quantidade de "${item.name}" alterada para ${newQuantity} por ${currentUserData.username}`);
+  addHistoryEntry(`Quantidade de "${item.name}" alterada para ${formatQuantity(newQuantity, newQuantityUnit)} por ${currentUserData.username}`);
 }
 
 function removeItem(id) {
@@ -1539,6 +1656,10 @@ function editProduct(productName) {
   products.push(finalName);
   deletedProductKeys.add(oldProductKey);
   deletedProductKeys.delete(getProductKey(finalName));
+  restoredProductKeys.delete(oldProductKey);
+  restoredProductKeys.add(getProductKey(finalName));
+  markProductChanged(oldProductKey, 'deleted');
+  markProductChanged(getProductKey(finalName), 'restored');
 
   items = items.map(item => getProductKey(item.name) === oldProductKey
     ? { ...item, name: finalName }
@@ -1565,6 +1686,8 @@ function deleteProduct(productName) {
   if (!confirm(message)) return;
 
   deletedProductKeys.add(productKey);
+  restoredProductKeys.delete(productKey);
+  markProductChanged(productKey, 'deleted');
   for (const item of productItems) {
     deletedItemIds.add(item.id);
   }
