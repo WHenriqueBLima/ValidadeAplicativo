@@ -199,11 +199,11 @@ input[readonly] {
 
 .monthly-sheet {
   width: 100%;
-  min-width: 920px;
+  min-width: 1240px;
   border-collapse: collapse;
   background: #f8fafc;
   color: #0f172a;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
 }
 
 .monthly-sheet th,
@@ -223,18 +223,18 @@ input[readonly] {
 }
 
 .monthly-sheet .sheet-product-cell {
-  width: 260px;
+  width: 230px;
   text-align: left;
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
 .monthly-sheet .sheet-quantity-cell {
-  width: 54px;
+  width: 46px;
 }
 
 .monthly-sheet .sheet-status-cell {
-  width: 128px;
+  width: 118px;
   font-weight: 700;
 }
 
@@ -252,7 +252,10 @@ input[readonly] {
 }
 
 .monthly-sheet .sheet-notes-cell {
-  width: 220px;
+  width: 260px;
+  text-align: left;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .item-list {

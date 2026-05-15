@@ -1011,32 +1011,48 @@ function renderMonthlySheet() {
   for (const productName of getProductNames()) {
     const productItems = (activeItemsByProduct.get(productName) || [])
       .sort((a, b) => getDaysRemaining(a.date) - getDaysRemaining(b.date))
-      .slice(0, 3);
+      .slice(0, 4);
 
     const row = document.createElement('tr');
     appendSheetCell(row, productName, 'sheet-product-cell');
 
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < 4; index += 1) {
       const item = productItems[index];
       if (item) {
         const status = getStatus(item, getDaysRemaining(item.date));
         appendSheetCell(row, formatDate(item.date));
         appendSheetCell(row, item.quantity ?? 1, 'sheet-quantity-cell');
-        if (index === 0) {
-          appendSheetCell(row, status.label, `sheet-status-cell ${status.css}`);
-        }
+        appendSheetCell(row, status.label, `sheet-status-cell ${status.css}`);
       } else {
         appendSheetCell(row, '');
         appendSheetCell(row, '', 'sheet-quantity-cell');
-        if (index === 0) {
-          appendSheetCell(row, '', 'sheet-status-cell');
-        }
+        appendSheetCell(row, '', 'sheet-status-cell');
       }
     }
 
-    appendSheetCell(row, '', 'sheet-notes-cell');
+    appendSheetCell(row, getSheetNotes(productItems), 'sheet-notes-cell');
     monthlySheetBody.appendChild(row);
   }
+}
+
+function getSheetNotes(productItems) {
+  const notes = [];
+
+  for (const item of productItems) {
+    const days = getDaysRemaining(item.date);
+    const quantity = item.quantity ?? 1;
+    const date = formatDate(item.date);
+
+    if (days < 0) {
+      notes.push(`Vencido: ${quantity} un. em ${date}`);
+    } else if (days <= 10) {
+      notes.push(`Muito próximo: ${quantity} un. em ${date}`);
+    } else if (days <= 20) {
+      notes.push(`Atenção: ${quantity} un. em ${date}`);
+    }
+  }
+
+  return notes.join(' | ');
 }
 
 function appendSheetCell(row, value, className = '') {
