@@ -980,7 +980,12 @@ function addHistoryEntry(action) {
 }
 
 function getProductKey(name) {
-  return name.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
+  return name
+    .trim()
+    .replace(/\s+/g, ' ')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR');
 }
 
 function normalizeProductName(name) {
