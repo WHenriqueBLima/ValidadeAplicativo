@@ -552,15 +552,17 @@ async function handlePullCloud() {
     return;
   }
 
-  if (!confirm('Baixar dados da nuvem e substituir os dados locais deste aparelho?')) {
+  if (!confirm('Baixar dados da nuvem e juntar com os dados locais deste aparelho?')) {
     return;
   }
 
-  updateSyncStatus('Baixando da nuvem...');
+  updateSyncStatus('Juntando com a nuvem...');
 
   try {
     const remoteState = normalizeServerState(await fetchRemoteState());
-    applyState(remoteState);
+    const mergedState = mergeStates(remoteState, getAppState());
+    applyState(mergedState);
+    await postRemoteState(getAppState());
     serverSyncAvailable = true;
     refreshCurrentView();
     updateSyncStatus();
@@ -635,6 +637,49 @@ function mergeById(serverEntries = [], localEntries = [], deletedIds = new Set()
   return [...merged.values()];
 }
 
+function mergeItems(serverItems = [], localItems = [], deletedIds = new Set(), deletedProducts = new Set()) {
+  const mergedBySignature = new Map();
+
+  for (const item of mergeById(serverItems, localItems, deletedIds)) {
+    if (!item || !item.id) continue;
+
+    const normalizedName = normalizeProductName(item.name || '');
+    if (!normalizedName) continue;
+    if (deletedProducts.has(getProductKey(normalizedName))) continue;
+
+    const normalizedItem = {
+      ...item,
+      name: normalizedName,
+      quantity: Number(item.quantity) || 1,
+      sold: Boolean(item.sold),
+    };
+    const signature = getItemSignature(normalizedItem);
+    const existing = mergedBySignature.get(signature);
+
+    if (!existing || getItemTimestamp(normalizedItem) >= getItemTimestamp(existing)) {
+      mergedBySignature.set(signature, normalizedItem);
+    }
+  }
+
+  return [...mergedBySignature.values()];
+}
+
+function getItemSignature(item) {
+  return [
+    getProductKey(item.name || ''),
+    item.date || '',
+    String(Number(item.quantity) || 1),
+    item.sold ? 'sold' : 'active',
+    item.soldDate || '',
+  ].join('|');
+}
+
+function getItemTimestamp(item) {
+  const timestamps = [item.updatedAt, item.soldDate, item.createdAt, item.id]
+    .map(value => Date.parse(value) || Number(value) || 0);
+  return Math.max(...timestamps, 0);
+}
+
 function mergeProducts(serverProducts = [], localProducts = [], deletedProducts = new Set()) {
   const merged = new Map();
 
@@ -654,12 +699,15 @@ function mergeProducts(serverProducts = [], localProducts = [], deletedProducts 
 function mergeStates(serverState, localState) {
   const mergedDeletedItemIds = mergeDeletedSet(serverState.deletedItemIds, localState.deletedItemIds);
   const mergedDeletedProductKeys = mergeDeletedSet(serverState.deletedProductKeys, localState.deletedProductKeys);
-  const mergedItems = mergeById(serverState.items, localState.items, mergedDeletedItemIds)
-    .filter(item => !mergedDeletedProductKeys.has(getProductKey(item.name || '')));
+  const mergedItems = mergeItems(serverState.items, localState.items, mergedDeletedItemIds, mergedDeletedProductKeys);
 
   return {
     items: mergedItems,
-    products: mergeProducts(serverState.products, localState.products, mergedDeletedProductKeys),
+    products: mergeProducts(
+      mergeProducts(serverState.products, localState.products, mergedDeletedProductKeys),
+      mergedItems.map(item => item.name),
+      mergedDeletedProductKeys
+    ),
     users: mergeById(serverState.users, localState.users),
     history: mergeById(serverState.history, localState.history),
     deletedItemIds: [...mergedDeletedItemIds],
@@ -1046,6 +1094,8 @@ function handleSaveItem(event) {
     date,
     quantity,
     sold: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   });
 
   nameInput.value = '';
@@ -1372,6 +1422,7 @@ function markSold(id) {
     sold: true,
     soldTo: currentUserData.username,
     soldDate: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   } : entry);
 
   saveItems();
@@ -1390,7 +1441,8 @@ function saveQuantity(id, input, item) {
 
   items = items.map(entry => entry.id === id ? {
     ...entry,
-    quantity: newQuantity
+    quantity: newQuantity,
+    updatedAt: new Date().toISOString(),
   } : entry);
 
   saveItems();
