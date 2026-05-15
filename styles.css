@@ -176,6 +176,85 @@ input[readonly] {
   color: #94a3b8;
 }
 
+.sheet-card .card-header {
+  align-items: center;
+}
+
+.sheet-card .card-header > div {
+  display: grid;
+  gap: 4px;
+}
+
+.sheet-print-button {
+  border-radius: 10px;
+  padding: 10px 14px;
+  white-space: nowrap;
+}
+
+.sheet-scroll {
+  overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+}
+
+.monthly-sheet {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.82rem;
+}
+
+.monthly-sheet th,
+.monthly-sheet td {
+  border: 1px solid #64748b;
+  padding: 8px;
+  height: 38px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.monthly-sheet th {
+  background: #cbd5e1;
+  color: #0f172a;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.monthly-sheet .sheet-product-cell {
+  width: 260px;
+  text-align: left;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.monthly-sheet .sheet-quantity-cell {
+  width: 54px;
+}
+
+.monthly-sheet .sheet-status-cell {
+  width: 128px;
+  font-weight: 700;
+}
+
+.monthly-sheet .sheet-status-cell.safe {
+  color: #047857;
+}
+
+.monthly-sheet .sheet-status-cell.urgent {
+  color: #a16207;
+}
+
+.monthly-sheet .sheet-status-cell.critical,
+.monthly-sheet .sheet-status-cell.expired {
+  color: #b91c1c;
+}
+
+.monthly-sheet .sheet-notes-cell {
+  width: 220px;
+}
+
 .item-list {
   list-style: none;
   margin: 0;
@@ -549,6 +628,11 @@ input[readonly] {
   .management-actions {
     justify-content: flex-start;
   }
+
+  .sheet-card .card-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 .screen {
@@ -778,4 +862,79 @@ input[readonly] {
 
 .delete-user-button:hover {
   color: #f87171;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #sheetSection,
+  #sheetSection * {
+    visibility: visible;
+  }
+
+  #sheetSection {
+    position: absolute;
+    inset: 0;
+  }
+
+  .app-shell {
+    max-width: none;
+    padding: 0;
+  }
+
+  header,
+  .tab-nav,
+  .sheet-print-button,
+  .sheet-card .card-header span {
+    display: none !important;
+  }
+
+  .card {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .sheet-card h2 {
+    display: block;
+    margin: 0 0 8px;
+    color: #111827;
+    font-size: 15px;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  .sheet-scroll {
+    overflow: visible;
+    border: none;
+  }
+
+  .monthly-sheet {
+    min-width: 0;
+    font-size: 9px;
+  }
+
+  .monthly-sheet th,
+  .monthly-sheet td {
+    border-color: #111827;
+    height: 24px;
+    padding: 3px 4px;
+  }
 }

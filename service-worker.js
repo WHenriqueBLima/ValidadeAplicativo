@@ -1,10 +1,10 @@
-const CACHE_NAME = 'validadeapp-v9';
+const CACHE_NAME = 'validadeapp-v10';
 const APP_SHELL = [
   './',
   './index.html',
-  './styles.css?v=20260514-5',
-  './sync-config.js?v=20260514-5',
-  './app.js?v=20260514-5',
+  './styles.css?v=20260514-6',
+  './sync-config.js?v=20260514-6',
+  './app.js?v=20260514-6',
   './manifest.json',
   './icon.svg',
 ];

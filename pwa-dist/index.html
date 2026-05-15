@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icon.svg" />
-  <link rel="stylesheet" href="styles.css?v=20260514-5" />
+  <link rel="stylesheet" href="styles.css?v=20260514-6" />
 </head>
 <body>
   <div id="loginScreen" class="screen">
@@ -54,6 +54,7 @@
       <nav class="tab-nav">
         <button id="addTab" class="tab-button active">Adicionar</button>
         <button id="viewTab" class="tab-button">Visualizar</button>
+        <button id="sheetTab" class="tab-button">Planilha</button>
         <button id="productsTab" class="tab-button hidden">Produtos</button>
       </nav>
 
@@ -117,6 +118,41 @@
               <span id="sortHint">Clique no produto para ver detalhes</span>
             </div>
             <ul id="itemList" class="product-groups"></ul>
+          </section>
+        </div>
+
+        <div id="sheetSection" class="tab-content hidden">
+          <section class="card sheet-card">
+            <div class="card-header">
+              <div>
+                <h2>Controle mensal</h2>
+                <span>Modelo igual ao controle usado na loja</span>
+              </div>
+              <button type="button" id="printSheetButton" class="sheet-print-button">Imprimir</button>
+            </div>
+            <div class="sheet-scroll">
+              <table class="monthly-sheet">
+                <thead>
+                  <tr>
+                    <th rowspan="2">Produto</th>
+                    <th colspan="3">1ª validade</th>
+                    <th colspan="2">2ª validade</th>
+                    <th colspan="2">3ª validade</th>
+                    <th rowspan="2">Anotações</th>
+                  </tr>
+                  <tr>
+                    <th>Data</th>
+                    <th>QT</th>
+                    <th>Status</th>
+                    <th>Data</th>
+                    <th>QT</th>
+                    <th>Data</th>
+                    <th>QT</th>
+                  </tr>
+                </thead>
+                <tbody id="monthlySheetBody"></tbody>
+              </table>
+            </div>
           </section>
         </div>
 
@@ -204,7 +240,7 @@
     </li>
   </template>
 
-  <script src="sync-config.js?v=20260514-5"></script>
-  <script src="app.js?v=20260514-5"></script>
+  <script src="sync-config.js?v=20260514-6"></script>
+  <script src="app.js?v=20260514-6"></script>
 </body>
 </html>

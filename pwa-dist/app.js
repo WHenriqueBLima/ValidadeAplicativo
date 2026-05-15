@@ -44,11 +44,15 @@ const togglePasswordButton = document.getElementById('togglePasswordButton');
 const backToAppButton = document.getElementById('backToAppButton');
 const addTab = document.getElementById('addTab');
 const viewTab = document.getElementById('viewTab');
+const sheetTab = document.getElementById('sheetTab');
 const productsTab = document.getElementById('productsTab');
 const addSection = document.getElementById('addSection');
 const viewSection = document.getElementById('viewSection');
+const sheetSection = document.getElementById('sheetSection');
 const productsSection = document.getElementById('productsSection');
 const productManagementList = document.getElementById('productManagementList');
+const monthlySheetBody = document.getElementById('monthlySheetBody');
+const printSheetButton = document.getElementById('printSheetButton');
 
 const itemTemplate = document.getElementById('itemTemplate');
 const userTemplate = document.getElementById('userTemplate');
@@ -121,6 +125,8 @@ function setupEventListeners() {
     activeAlertFilter = null;
     switchTab('view');
   });
+  sheetTab.addEventListener('click', () => switchTab('sheet'));
+  printSheetButton.addEventListener('click', () => window.print());
   productsTab.addEventListener('click', () => switchTab('products'));
   urgentSummaryButton.addEventListener('click', () => expandProductsByAlert('urgent'));
   criticalSummaryButton.addEventListener('click', () => expandProductsByAlert('critical'));
@@ -239,10 +245,12 @@ function switchTab(tab) {
 
   addTab.classList.toggle('active', tab === 'add');
   viewTab.classList.toggle('active', tab === 'view');
+  sheetTab.classList.toggle('active', tab === 'sheet');
   productsTab.classList.toggle('active', tab === 'products');
 
   addSection.classList.toggle('hidden', tab !== 'add');
   viewSection.classList.toggle('hidden', tab !== 'view');
+  sheetSection.classList.toggle('hidden', tab !== 'sheet');
   productsSection.classList.toggle('hidden', tab !== 'products');
 
   if (tab === 'add') {
@@ -251,6 +259,11 @@ function switchTab(tab) {
 
   if (tab === 'view') {
     renderItems();
+    return;
+  }
+
+  if (tab === 'sheet') {
+    renderMonthlySheet();
     return;
   }
 
@@ -771,6 +784,10 @@ function refreshCurrentView() {
     renderProductManagement();
   }
 
+  if (!sheetSection.classList.contains('hidden')) {
+    renderMonthlySheet();
+  }
+
   if (!userManagementScreen.classList.contains('hidden')) {
     renderUsers();
   }
@@ -975,6 +992,60 @@ function expandProductsByAlert(filter) {
   activeAlertFilter = filter;
   switchTab('view');
   document.getElementById('listCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderMonthlySheet() {
+  cleanupOldSoldItems();
+  renderProductSuggestions();
+  monthlySheetBody.innerHTML = '';
+
+  const activeItemsByProduct = new Map();
+  for (const item of items.filter(entry => !entry.sold)) {
+    const productName = ensureProduct(getExistingProductName(item.name) || item.name);
+    if (!activeItemsByProduct.has(productName)) {
+      activeItemsByProduct.set(productName, []);
+    }
+    activeItemsByProduct.get(productName).push(item);
+  }
+
+  for (const productName of getProductNames()) {
+    const productItems = (activeItemsByProduct.get(productName) || [])
+      .sort((a, b) => getDaysRemaining(a.date) - getDaysRemaining(b.date))
+      .slice(0, 3);
+
+    const row = document.createElement('tr');
+    appendSheetCell(row, productName, 'sheet-product-cell');
+
+    for (let index = 0; index < 3; index += 1) {
+      const item = productItems[index];
+      if (item) {
+        const status = getStatus(item, getDaysRemaining(item.date));
+        appendSheetCell(row, formatDate(item.date));
+        appendSheetCell(row, item.quantity ?? 1, 'sheet-quantity-cell');
+        if (index === 0) {
+          appendSheetCell(row, status.label, `sheet-status-cell ${status.css}`);
+        }
+      } else {
+        appendSheetCell(row, '');
+        appendSheetCell(row, '', 'sheet-quantity-cell');
+        if (index === 0) {
+          appendSheetCell(row, '', 'sheet-status-cell');
+        }
+      }
+    }
+
+    appendSheetCell(row, '', 'sheet-notes-cell');
+    monthlySheetBody.appendChild(row);
+  }
+}
+
+function appendSheetCell(row, value, className = '') {
+  const cell = document.createElement('td');
+  cell.textContent = value;
+  if (className) {
+    cell.className = className;
+  }
+  row.appendChild(cell);
 }
 
 function renderItems() {
