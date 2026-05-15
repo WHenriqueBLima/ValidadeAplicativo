@@ -9,6 +9,7 @@ const SYNC_SERVER_KEY = 'validadeApp.syncServer';
 const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
 const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
 const SYNC_INTERVAL_MS = 5000;
+const APP_VERSION = '20260515-11';
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -72,6 +73,7 @@ let isApplyingRemoteState = false;
 let isSyncingWithServer = false;
 let pendingSharedSave = false;
 let syncIntervalId = null;
+let syncSaveTimeoutId = null;
 let expandedProductKeys = new Set();
 
 // Initialize app
@@ -337,7 +339,7 @@ function loadItems() {
 
 function saveItems() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  saveSharedState();
+  scheduleSharedStateSave();
 }
 
 function loadProducts() {
@@ -371,7 +373,7 @@ function selectProductForNewValidity(productName) {
 
 function saveProducts() {
   localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
-  saveSharedState();
+  scheduleSharedStateSave();
 }
 
 function loadUsers() {
@@ -385,7 +387,7 @@ function loadUsers() {
 
 function saveUsers() {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  saveSharedState();
+  scheduleSharedStateSave();
 }
 
 function loadHistory() {
@@ -399,7 +401,7 @@ function loadHistory() {
 
 function saveHistory() {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  saveSharedState();
+  scheduleSharedStateSave();
 }
 
 function loadDeletedSet(key) {
@@ -414,7 +416,7 @@ function loadDeletedSet(key) {
 function saveDeletedState() {
   localStorage.setItem(DELETED_ITEMS_KEY, JSON.stringify([...deletedItemIds]));
   localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify([...deletedProductKeys]));
-  saveSharedState();
+  scheduleSharedStateSave();
 }
 
 function getAppState() {
@@ -547,6 +549,7 @@ async function handleSyncNow() {
 function handleDiagnoseSync() {
   const productList = getProductNames();
   const lines = [
+    `Versão: ${APP_VERSION}`,
     `Status: ${getSyncStatusText()}`,
     `Produtos neste aparelho: ${productList.length}`,
     '',
@@ -734,6 +737,11 @@ async function canReachSyncServer() {
 }
 
 async function syncWithServer(options = {}) {
+  if (options.force && syncSaveTimeoutId) {
+    clearTimeout(syncSaveTimeoutId);
+    syncSaveTimeoutId = null;
+  }
+
   if (isSyncingWithServer) {
     pendingSharedSave = true;
     return;
@@ -766,6 +774,20 @@ async function syncWithServer(options = {}) {
       await saveSharedState();
     }
   }
+}
+
+function scheduleSharedStateSave() {
+  if (isApplyingRemoteState) return;
+  if (!serverSyncAvailable && !hasSupabaseSync()) return;
+
+  if (syncSaveTimeoutId) {
+    clearTimeout(syncSaveTimeoutId);
+  }
+
+  syncSaveTimeoutId = setTimeout(() => {
+    syncSaveTimeoutId = null;
+    saveSharedState();
+  }, 800);
 }
 
 async function saveSharedState() {
