@@ -17,6 +17,7 @@
 html, body {
   min-height: 100%;
   margin: 0;
+  overflow-x: hidden;
 }
 
 body {
@@ -29,9 +30,11 @@ button, input {
 }
 
 .app-shell {
+  width: 100%;
   max-width: 680px;
   margin: 0 auto;
   padding: 20px 16px 36px;
+  min-width: 0;
 }
 
 header {
@@ -71,9 +74,11 @@ button:focus-visible {
 main {
   display: grid;
   gap: 18px;
+  min-width: 0;
 }
 
 .card {
+  min-width: 0;
   background: rgba(15, 23, 42, 0.88);
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 24px;
@@ -192,7 +197,12 @@ input[readonly] {
 }
 
 .sheet-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 12px;
 }
@@ -793,6 +803,7 @@ input[readonly] {
 
 .tab-content {
   display: block;
+  min-width: 0;
 }
 
 .tab-content.hidden {
