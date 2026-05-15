@@ -1138,26 +1138,18 @@ function renderItems() {
     productGroup.className = 'product-group';
     productGroup.dataset.productKey = getProductKey(productName);
 
-    // Count stats for this product
-    let productUrgent = 0;
-    let productExpired = 0;
-    let productSold = 0;
-
     for (const item of productItems) {
       const days = getDaysRemaining(item.date);
       if (!item.sold) {
         if (days < 0) {
-          productExpired += 1;
           expired += 1;
         }
         if (days <= 10 && days >= 0) {
           critical += 1;
         } else if (days <= 20 && days >= 0) {
-          productUrgent += 1;
           urgent += 1;
         }
       } else {
-        productSold += 1;
         sold += 1;
       }
     }
@@ -1165,7 +1157,6 @@ function renderItems() {
     const headerRow = document.createElement('div');
     headerRow.className = 'product-header-row';
 
-    // Product header
     const header = document.createElement('button');
     header.className = 'product-header';
     
