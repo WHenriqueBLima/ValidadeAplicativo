@@ -9,7 +9,7 @@ const SYNC_SERVER_KEY = 'validadeApp.syncServer';
 const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
 const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
 const SYNC_INTERVAL_MS = 5000;
-const APP_VERSION = '20260515-11';
+const APP_VERSION = '20260515-12';
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -1005,6 +1005,14 @@ function ensureProduct(name) {
   return normalizedName;
 }
 
+function resolveProductName(name) {
+  const normalizedName = normalizeProductName(name || '');
+  if (!normalizedName) return null;
+
+  const existingName = getExistingProductName(normalizedName);
+  return existingName || normalizedName;
+}
+
 function syncProductsFromItems() {
   let changed = false;
 
@@ -1181,7 +1189,8 @@ function renderMonthlySheet() {
 
   const activeItemsByProduct = new Map();
   for (const item of items.filter(entry => !entry.sold)) {
-    const productName = ensureProduct(getExistingProductName(item.name) || item.name);
+    const productName = resolveProductName(item.name);
+    if (!productName || deletedProductKeys.has(getProductKey(productName))) continue;
     if (!activeItemsByProduct.has(productName)) {
       activeItemsByProduct.set(productName, []);
     }
@@ -1259,7 +1268,8 @@ function renderItems() {
   // Group validity entries under the product catalog, so products remain visible with zero dates.
   const grouped = Object.fromEntries(getProductNames().map(productName => [productName, []]));
   for (const item of sorted) {
-    const productName = ensureProduct(getExistingProductName(item.name) || item.name);
+    const productName = resolveProductName(item.name);
+    if (!productName || deletedProductKeys.has(getProductKey(productName))) continue;
     if (!grouped[productName]) {
       grouped[productName] = [];
     }
