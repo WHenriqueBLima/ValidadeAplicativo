@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icon.svg" />
-  <link rel="stylesheet" href="styles.css?v=20260515-16" />
+  <link rel="stylesheet" href="styles.css?v=20260515-17" />
 </head>
 <body>
   <div id="loginScreen" class="screen">
@@ -73,7 +73,11 @@
               </label>
               <label>
                 Data de validade
-                <input type="date" id="itemDate" required />
+                <div class="date-field">
+                  <input type="text" id="itemDateText" inputmode="numeric" autocomplete="off" placeholder="dd/mm/aaaa" maxlength="10" required />
+                  <button type="button" id="itemDatePickerButton" class="date-picker-button" aria-label="Abrir calendário">Calendário</button>
+                  <input type="date" id="itemDate" class="native-date-input" tabindex="-1" aria-hidden="true" />
+                </div>
               </label>
               <label>
                 Quantidade
@@ -258,7 +262,7 @@
     </li>
   </template>
 
-  <script src="sync-config.js?v=20260515-16"></script>
-  <script src="app.js?v=20260515-16"></script>
+  <script src="sync-config.js?v=20260515-17"></script>
+  <script src="app.js?v=20260515-17"></script>
 </body>
 </html>

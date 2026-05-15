@@ -11,7 +11,7 @@ const SYNC_SERVER_KEY = 'validadeApp.syncServer';
 const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
 const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
 const SYNC_INTERVAL_MS = 5000;
-const APP_VERSION = '20260515-16';
+const APP_VERSION = '20260515-17';
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -47,6 +47,8 @@ const manageUsersButton = document.getElementById('manageUsersButton');
 const logoutButton = document.getElementById('logoutButton');
 const togglePasswordButton = document.getElementById('togglePasswordButton');
 const clearAllButton = document.getElementById('clearAll');
+const itemDateText = document.getElementById('itemDateText');
+const itemDatePickerButton = document.getElementById('itemDatePickerButton');
 const backToAppButton = document.getElementById('backToAppButton');
 const addTab = document.getElementById('addTab');
 const viewTab = document.getElementById('viewTab');
@@ -131,6 +133,10 @@ function setupEventListeners() {
   diagnoseSyncButton.addEventListener('click', handleDiagnoseSync);
   configureSyncButton.addEventListener('click', handleConfigureSync);
   itemForm.addEventListener('submit', handleSaveItem);
+  itemDateText.addEventListener('input', handleDateTextInput);
+  itemDateText.addEventListener('blur', syncDateTextToNativeInput);
+  document.getElementById('itemDate').addEventListener('change', handleNativeDateChange);
+  itemDatePickerButton.addEventListener('click', openNativeDatePicker);
   createUserForm.addEventListener('submit', handleCreateUser);
   logoutButton.addEventListener('click', handleLogout);
   manageUsersButton.addEventListener('click', showUserManagement);
@@ -325,10 +331,78 @@ function handleCreateUser(event) {
 
 function handleClearAll() {
   itemForm.reset();
+  itemDateText.value = '';
+  document.getElementById('itemDate').value = '';
   document.getElementById('itemQuantity').value = '1';
   document.getElementById('itemQuantityUnit').value = 'un';
   clearSelectedProductHint();
   document.getElementById('itemName').focus();
+}
+
+function handleDateTextInput() {
+  const formattedDate = formatDateText(itemDateText.value);
+  itemDateText.value = formattedDate;
+  syncDateTextToNativeInput();
+}
+
+function handleNativeDateChange(event) {
+  itemDateText.value = isoToDateText(event.target.value);
+}
+
+function openNativeDatePicker() {
+  const nativeDateInput = document.getElementById('itemDate');
+  nativeDateInput.value = parseDateTextToIso(itemDateText.value) || nativeDateInput.value;
+
+  if (typeof nativeDateInput.showPicker === 'function') {
+    nativeDateInput.showPicker();
+    return;
+  }
+
+  nativeDateInput.focus();
+  nativeDateInput.click();
+}
+
+function syncDateTextToNativeInput() {
+  document.getElementById('itemDate').value = parseDateTextToIso(itemDateText.value);
+}
+
+function formatDateText(value) {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 8);
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4, 8);
+
+  return [day, month, year].filter(Boolean).join('/');
+}
+
+function parseDateTextToIso(value) {
+  const match = String(value || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return '';
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const parsedDate = new Date(year, month - 1, day);
+
+  if (
+    parsedDate.getFullYear() !== year
+    || parsedDate.getMonth() !== month - 1
+    || parsedDate.getDate() !== day
+  ) {
+    return '';
+  }
+
+  return [
+    String(year).padStart(4, '0'),
+    String(month).padStart(2, '0'),
+    String(day).padStart(2, '0'),
+  ].join('-');
+}
+
+function isoToDateText(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return '';
+  return `${match[3]}/${match[2]}/${match[1]}`;
 }
 
 function loadItems() {
@@ -368,14 +442,13 @@ function clearSelectedProductHint() {
 
 function selectProductForNewValidity(productName) {
   const nameInput = document.getElementById('itemName');
-  const dateInput = document.getElementById('itemDate');
 
   switchTab('add');
   nameInput.value = productName;
   nameInput.readOnly = true;
   selectedProductHint.textContent = `Adicionando validade para: ${productName}`;
   selectedProductHint.classList.remove('hidden');
-  dateInput.focus();
+  itemDateText.focus();
 }
 
 function saveProducts() {
@@ -1181,6 +1254,7 @@ function cleanupOldHistory() {
 
 function handleSaveItem(event) {
   event.preventDefault();
+  syncDateTextToNativeInput();
   const nameInput = document.getElementById('itemName');
   const dateInput = document.getElementById('itemDate');
   const quantityInput = document.getElementById('itemQuantity');
@@ -1209,6 +1283,7 @@ function handleSaveItem(event) {
 
   nameInput.value = '';
   dateInput.value = '';
+  itemDateText.value = '';
   quantityInput.value = '1';
   quantityUnitInput.value = 'un';
   clearSelectedProductHint();

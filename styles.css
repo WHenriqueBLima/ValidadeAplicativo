@@ -115,6 +115,32 @@ select {
   gap: 10px;
 }
 
+.date-field {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.date-picker-button {
+  border-radius: 14px;
+  padding: 0 14px;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.native-date-input {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 input[readonly] {
   border-color: rgba(56, 189, 248, 0.35);
   background: rgba(14, 116, 144, 0.14);
@@ -676,6 +702,22 @@ input[readonly] {
 
   .quantity-field {
     grid-template-columns: minmax(0, 1fr) 106px;
+  }
+
+  .date-field {
+    grid-template-columns: minmax(0, 1fr) 46px;
+  }
+
+  .date-picker-button {
+    width: 46px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .date-picker-button::before {
+    content: "Cal";
+    font-size: 0.82rem;
   }
 
   .item-row {
