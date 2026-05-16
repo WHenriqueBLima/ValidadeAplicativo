@@ -1007,6 +1007,146 @@ input[readonly] {
   font-size: 0.78rem;
 }
 
+.section-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.section-row {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.section-header > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.section-name {
+  color: #f8fafc;
+  overflow-wrap: anywhere;
+}
+
+.section-count {
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.delete-section-button,
+.section-add-existing-button,
+.section-create-product-button,
+.section-action-button {
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.delete-section-button,
+.section-action-button.danger {
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+}
+
+.section-add-existing-button,
+.section-create-product-button,
+.section-action-button.primary {
+  background: rgba(56, 189, 248, 0.14);
+  color: #bae6fd;
+}
+
+.section-controls {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.section-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.section-product-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.section-product-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.section-product-row strong {
+  min-width: 0;
+  color: #f8fafc;
+  overflow-wrap: anywhere;
+}
+
+.section-product-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 680px) {
+  .section-header,
+  .section-product-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-control-row {
+    grid-template-columns: 1fr;
+  }
+
+  .delete-section-button,
+  .section-add-existing-button,
+  .section-create-product-button {
+    width: 100%;
+  }
+
+  .section-product-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .section-action-button {
+    flex: 1 1 132px;
+    min-width: 0;
+    white-space: normal;
+  }
+}
+
 .toast-container {
   position: fixed;
   left: 50%;

@@ -1,9 +1,11 @@
 const STORAGE_KEY = 'validadeApp.items';
 const PRODUCTS_KEY = 'validadeApp.products';
+const SECTIONS_KEY = 'validadeApp.sections';
 const USERS_KEY = 'validadeApp.users';
 const HISTORY_KEY = 'validadeApp.history';
 const DELETED_ITEMS_KEY = 'validadeApp.deletedItems';
 const DELETED_PRODUCTS_KEY = 'validadeApp.deletedProducts';
+const DELETED_SECTIONS_KEY = 'validadeApp.deletedSections';
 const DELETED_USERS_KEY = 'validadeApp.deletedUsers';
 const RESTORED_PRODUCTS_KEY = 'validadeApp.restoredProducts';
 const PRODUCT_CHANGES_KEY = 'validadeApp.productChanges';
@@ -14,7 +16,7 @@ const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
 const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
 const SYNC_INTERVAL_MS = 5000;
 const SYNC_MAX_ATTEMPTS = 4;
-const APP_VERSION = '20260515-20';
+const APP_VERSION = '20260515-21';
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -22,6 +24,7 @@ const userManagementScreen = document.getElementById('userManagementScreen');
 
 const loginForm = document.getElementById('loginForm');
 const itemForm = document.getElementById('itemForm');
+const createSectionForm = document.getElementById('createSectionForm');
 const createUserForm = document.getElementById('createUserForm');
 
 const itemList = document.getElementById('itemList');
@@ -58,26 +61,32 @@ const itemDatePickerButton = document.getElementById('itemDatePickerButton');
 const backToAppButton = document.getElementById('backToAppButton');
 const addTab = document.getElementById('addTab');
 const viewTab = document.getElementById('viewTab');
+const sectionsTab = document.getElementById('sectionsTab');
 const sheetTab = document.getElementById('sheetTab');
 const productsTab = document.getElementById('productsTab');
 const addSection = document.getElementById('addSection');
 const viewSection = document.getElementById('viewSection');
+const sectionsSection = document.getElementById('sectionsSection');
 const sheetSection = document.getElementById('sheetSection');
 const productsSection = document.getElementById('productsSection');
+const sectionList = document.getElementById('sectionList');
 const productManagementList = document.getElementById('productManagementList');
 const monthlySheetBody = document.getElementById('monthlySheetBody');
 const printSheetButton = document.getElementById('printSheetButton');
 
 const itemTemplate = document.getElementById('itemTemplate');
 const userTemplate = document.getElementById('userTemplate');
+const sectionTemplate = document.getElementById('sectionTemplate');
 const toastContainer = document.getElementById('toastContainer');
 
 let items = loadItems();
 let products = loadProducts();
+let sections = loadSections();
 let users = loadUsers();
 let history = loadHistory();
 let deletedItemIds = loadDeletedSet(DELETED_ITEMS_KEY);
 let deletedProductKeys = loadDeletedSet(DELETED_PRODUCTS_KEY);
+let deletedSectionIds = loadDeletedSet(DELETED_SECTIONS_KEY);
 let deletedUserIds = loadDeletedSet(DELETED_USERS_KEY);
 let restoredProductKeys = loadDeletedSet(RESTORED_PRODUCTS_KEY);
 let productChanges = loadProductChanges();
@@ -144,6 +153,7 @@ function setupEventListeners() {
   diagnoseSyncButton.addEventListener('click', handleDiagnoseSync);
   configureSyncButton.addEventListener('click', handleConfigureSync);
   itemForm.addEventListener('submit', handleSaveItem);
+  createSectionForm.addEventListener('submit', handleCreateSection);
   document.getElementById('itemName').addEventListener('input', handleProductSearchInput);
   document.getElementById('itemName').addEventListener('focus', handleProductSearchInput);
   document.getElementById('itemName').addEventListener('blur', hideProductSearchResultsSoon);
@@ -162,6 +172,7 @@ function setupEventListeners() {
     activeAlertFilter = null;
     switchTab('view');
   });
+  sectionsTab.addEventListener('click', () => switchTab('sections'));
   sheetTab.addEventListener('click', () => switchTab('sheet'));
   printSheetButton.addEventListener('click', () => window.print());
   productsTab.addEventListener('click', () => switchTab('products'));
@@ -288,11 +299,13 @@ function switchTab(tab) {
 
   addTab.classList.toggle('active', tab === 'add');
   viewTab.classList.toggle('active', tab === 'view');
+  sectionsTab.classList.toggle('active', tab === 'sections');
   sheetTab.classList.toggle('active', tab === 'sheet');
   productsTab.classList.toggle('active', tab === 'products');
 
   addSection.classList.toggle('hidden', tab !== 'add');
   viewSection.classList.toggle('hidden', tab !== 'view');
+  sectionsSection.classList.toggle('hidden', tab !== 'sections');
   sheetSection.classList.toggle('hidden', tab !== 'sheet');
   productsSection.classList.toggle('hidden', tab !== 'products');
 
@@ -302,6 +315,11 @@ function switchTab(tab) {
 
   if (tab === 'view') {
     renderItems();
+    return;
+  }
+
+  if (tab === 'sections') {
+    renderSections();
     return;
   }
 
@@ -449,6 +467,15 @@ function loadProducts() {
   }
 }
 
+function loadSections() {
+  try {
+    const raw = localStorage.getItem(SECTIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 function clearSelectedProductHint() {
   const nameInput = document.getElementById('itemName');
 
@@ -472,6 +499,11 @@ function selectProductForNewValidity(productName) {
 
 function saveProducts() {
   localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+  scheduleSharedStateSave();
+}
+
+function saveSections() {
+  localStorage.setItem(SECTIONS_KEY, JSON.stringify(sections));
   scheduleSharedStateSave();
 }
 
@@ -524,6 +556,7 @@ function loadProductChanges() {
 function saveDeletedState() {
   localStorage.setItem(DELETED_ITEMS_KEY, JSON.stringify([...deletedItemIds]));
   localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify([...deletedProductKeys]));
+  localStorage.setItem(DELETED_SECTIONS_KEY, JSON.stringify([...deletedSectionIds]));
   localStorage.setItem(DELETED_USERS_KEY, JSON.stringify([...deletedUserIds]));
   localStorage.setItem(RESTORED_PRODUCTS_KEY, JSON.stringify([...restoredProductKeys]));
   localStorage.setItem(PRODUCT_CHANGES_KEY, JSON.stringify(productChanges));
@@ -534,10 +567,12 @@ function getAppState() {
   return {
     items,
     products,
+    sections,
     users,
     history,
     deletedItemIds: [...deletedItemIds],
     deletedProductKeys: [...deletedProductKeys],
+    deletedSectionIds: [...deletedSectionIds],
     deletedUserIds: [...deletedUserIds],
     restoredProductKeys: [...restoredProductKeys],
     productChanges,
@@ -701,6 +736,7 @@ async function handleSyncNow() {
 
 function handleDiagnoseSync() {
   const productList = getProductNames();
+  const sectionNames = getSections().map(section => section.name);
   const lines = [
     `Versão: ${APP_VERSION}`,
     `Status: ${getSyncStatusText()}`,
@@ -709,6 +745,7 @@ function handleDiagnoseSync() {
     `Última sync: ${lastSyncAt ? new Date(lastSyncAt).toLocaleString('pt-BR') : 'nunca'}`,
     `Último erro: ${lastSyncError || 'nenhum'}`,
     `Produtos neste aparelho: ${productList.length}`,
+    `Seções neste aparelho: ${sectionNames.length}`,
     '',
     ...productList.map((productName, index) => `${index + 1}. ${productName}`),
   ];
@@ -738,10 +775,12 @@ function normalizeServerState(serverState) {
     return {
       items: [],
       products: [],
+      sections: [],
       users: [],
       history: [],
       deletedItemIds: [],
       deletedProductKeys: [],
+      deletedSectionIds: [],
       deletedUserIds: [],
       restoredProductKeys: [],
       productChanges: {},
@@ -751,10 +790,12 @@ function normalizeServerState(serverState) {
   return {
     items: Array.isArray(serverState.items) ? serverState.items : [],
     products: Array.isArray(serverState.products) ? serverState.products : [],
+    sections: Array.isArray(serverState.sections) ? serverState.sections : [],
     users: Array.isArray(serverState.users) ? serverState.users : [],
     history: Array.isArray(serverState.history) ? serverState.history : [],
     deletedItemIds: Array.isArray(serverState.deletedItemIds) ? serverState.deletedItemIds : [],
     deletedProductKeys: Array.isArray(serverState.deletedProductKeys) ? serverState.deletedProductKeys : [],
+    deletedSectionIds: Array.isArray(serverState.deletedSectionIds) ? serverState.deletedSectionIds : [],
     deletedUserIds: Array.isArray(serverState.deletedUserIds) ? serverState.deletedUserIds : [],
     restoredProductKeys: Array.isArray(serverState.restoredProductKeys) ? serverState.restoredProductKeys : [],
     productChanges: serverState.productChanges && typeof serverState.productChanges === 'object' ? serverState.productChanges : {},
@@ -764,17 +805,19 @@ function normalizeServerState(serverState) {
 function persistLocalState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+  localStorage.setItem(SECTIONS_KEY, JSON.stringify(sections));
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
   localStorage.setItem(DELETED_ITEMS_KEY, JSON.stringify([...deletedItemIds]));
   localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify([...deletedProductKeys]));
+  localStorage.setItem(DELETED_SECTIONS_KEY, JSON.stringify([...deletedSectionIds]));
   localStorage.setItem(DELETED_USERS_KEY, JSON.stringify([...deletedUserIds]));
   localStorage.setItem(RESTORED_PRODUCTS_KEY, JSON.stringify([...restoredProductKeys]));
   localStorage.setItem(PRODUCT_CHANGES_KEY, JSON.stringify(productChanges));
 }
 
 function hasUsefulState(state) {
-  return ['items', 'products', 'users', 'history'].some(key => Array.isArray(state[key]) && state[key].length > 0);
+  return ['items', 'products', 'sections', 'users', 'history'].some(key => Array.isArray(state[key]) && state[key].length > 0);
 }
 
 function mergeDeletedSet(serverEntries = [], localEntries = []) {
@@ -803,6 +846,10 @@ function getEntryTimestamp(entry) {
   const timestamps = [entry.updatedAt, entry.soldDate, entry.timestamp, entry.createdAt, entry.id]
     .map(value => Date.parse(value) || Number(value) || 0);
   return Math.max(...timestamps, 0);
+}
+
+function createId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function mergeItems(serverItems = [], localItems = [], deletedIds = new Set(), deletedProducts = new Set()) {
@@ -844,6 +891,93 @@ function mergeProducts(serverProducts = [], localProducts = [], deletedProducts 
   return [...merged.values()];
 }
 
+function mergeSections(serverSections = [], localSections = [], deletedSections = new Set(), deletedProducts = new Set()) {
+  const merged = new Map();
+
+  for (const section of [...serverSections, ...localSections]) {
+    const normalizedSection = normalizeSection(section, deletedProducts);
+    if (!normalizedSection || deletedSections.has(normalizedSection.id)) continue;
+
+    const existing = merged.get(normalizedSection.id);
+    if (!existing) {
+      merged.set(normalizedSection.id, normalizedSection);
+      continue;
+    }
+
+    const latest = getEntryTimestamp(normalizedSection) >= getEntryTimestamp(existing)
+      ? normalizedSection
+      : existing;
+    const productKeyChanges = mergeSectionProductChanges(
+      existing.productKeyChanges,
+      normalizedSection.productKeyChanges
+    );
+
+    merged.set(normalizedSection.id, normalizeSection({
+      ...existing,
+      ...latest,
+      createdAt: existing.createdAt || normalizedSection.createdAt || latest.createdAt,
+      productKeyChanges,
+    }, deletedProducts));
+  }
+
+  return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+}
+
+function normalizeSection(section, deletedProducts = new Set()) {
+  if (!section || !section.id) return null;
+  const name = normalizeProductName(section.name || '');
+  if (!name) return null;
+  const productKeyChanges = mergeSectionProductChanges(section.productKeyChanges || {});
+
+  const baseProductKeys = Array.isArray(section.productKeys)
+    ? section.productKeys
+      .map(productKey => getProductKey(productKey || ''))
+      .filter(productKey => productKey && !deletedProducts.has(productKey))
+    : [];
+
+  for (const productKey of baseProductKeys) {
+    if (!productKeyChanges[productKey]) {
+      productKeyChanges[productKey] = {
+        status: 'added',
+        timestamp: section.createdAt || '1970-01-01T00:00:00.000Z',
+      };
+    }
+  }
+
+  const productKeys = Object.entries(productKeyChanges)
+    .filter(([productKey, change]) => change.status === 'added' && !deletedProducts.has(productKey))
+    .map(([productKey]) => productKey);
+
+  return {
+    ...section,
+    name,
+    productKeys: [...new Set(productKeys)],
+    productKeyChanges,
+  };
+}
+
+function mergeSectionProductChanges(...changeMaps) {
+  const merged = {};
+
+  for (const changes of changeMaps) {
+    for (const [rawProductKey, change] of Object.entries(changes || {})) {
+      const productKey = getProductKey(rawProductKey || '');
+      if (!productKey || !change || !change.status) continue;
+
+      const normalizedChange = {
+        status: change.status === 'removed' ? 'removed' : 'added',
+        timestamp: change.timestamp || '1970-01-01T00:00:00.000Z',
+      };
+      const existing = merged[productKey];
+      if (!existing || getEntryTimestamp(normalizedChange) >= getEntryTimestamp(existing)) {
+        merged[productKey] = normalizedChange;
+      }
+    }
+  }
+
+  return merged;
+}
+
 function mergeProductChanges(serverChanges = {}, localChanges = {}) {
   const merged = {};
 
@@ -874,6 +1008,7 @@ function markProductChanged(productKey, status) {
 function mergeStates(serverState, localState) {
   const mergedDeletedItemIds = mergeDeletedSet(serverState.deletedItemIds, localState.deletedItemIds);
   const mergedDeletedProductKeys = mergeDeletedSet(serverState.deletedProductKeys, localState.deletedProductKeys);
+  const mergedDeletedSectionIds = mergeDeletedSet(serverState.deletedSectionIds, localState.deletedSectionIds);
   const mergedDeletedUserIds = mergeDeletedSet(serverState.deletedUserIds, localState.deletedUserIds);
   const mergedProductChanges = mergeProductChanges(serverState.productChanges, localState.productChanges);
 
@@ -895,10 +1030,12 @@ function mergeStates(serverState, localState) {
       mergedItems.map(item => item.name),
       mergedDeletedProductKeys
     ),
+    sections: mergeSections(serverState.sections, localState.sections, mergedDeletedSectionIds, mergedDeletedProductKeys),
     users: mergeById(serverState.users, localState.users, mergedDeletedUserIds),
     history: mergeById(serverState.history, localState.history),
     deletedItemIds: [...mergedDeletedItemIds],
     deletedProductKeys: [...mergedDeletedProductKeys],
+    deletedSectionIds: [...mergedDeletedSectionIds],
     deletedUserIds: [...mergedDeletedUserIds],
     restoredProductKeys: Array.from(new Set([...(serverState.restoredProductKeys || []), ...(localState.restoredProductKeys || [])])),
     productChanges: mergedProductChanges,
@@ -909,10 +1046,12 @@ function applyState(state) {
   isApplyingRemoteState = true;
   items = Array.isArray(state.items) ? state.items : [];
   products = Array.isArray(state.products) ? state.products : [];
+  sections = Array.isArray(state.sections) ? state.sections : [];
   users = Array.isArray(state.users) ? state.users : [];
   history = Array.isArray(state.history) ? state.history : [];
   deletedItemIds = new Set(Array.isArray(state.deletedItemIds) ? state.deletedItemIds : []);
   deletedProductKeys = new Set(Array.isArray(state.deletedProductKeys) ? state.deletedProductKeys : []);
+  deletedSectionIds = new Set(Array.isArray(state.deletedSectionIds) ? state.deletedSectionIds : []);
   deletedUserIds = new Set(Array.isArray(state.deletedUserIds) ? state.deletedUserIds : []);
   restoredProductKeys = new Set(Array.isArray(state.restoredProductKeys) ? state.restoredProductKeys : []);
   productChanges = state.productChanges && typeof state.productChanges === 'object' ? state.productChanges : {};
@@ -1231,6 +1370,10 @@ function refreshCurrentView() {
     renderItems();
   }
 
+  if (!sectionsSection.classList.contains('hidden')) {
+    renderSections();
+  }
+
   if (!productsSection.classList.contains('hidden')) {
     renderProductManagement();
   }
@@ -1435,6 +1578,316 @@ function hideProductSearchResultsSoon() {
 function hideProductSearchResults() {
   productSearchResults.innerHTML = '';
   productSearchResults.classList.add('hidden');
+}
+
+function handleCreateSection(event) {
+  event.preventDefault();
+  const nameInput = document.getElementById('newSectionName');
+  const sectionName = normalizeProductName(nameInput.value);
+
+  if (!sectionName) {
+    showToast('Informe o nome da seção.', 'error');
+    return;
+  }
+
+  if (sections.some(section => getProductKey(section.name) === getProductKey(sectionName))) {
+    showToast('Essa seção já existe.', 'error');
+    return;
+  }
+
+  const section = {
+    id: createId(),
+    name: sectionName,
+    productKeys: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  sections.push(section);
+  deletedSectionIds.delete(section.id);
+  nameInput.value = '';
+  saveSections();
+  renderSections();
+  addHistoryEntry(`Seção "${sectionName}" criada por ${currentUserData.username}`);
+  showToast('Seção criada. Sincronizando...', 'success');
+}
+
+function renderSections() {
+  sectionList.innerHTML = '';
+  const visibleSections = getSections();
+
+  if (visibleSections.length === 0) {
+    const emptyRow = document.createElement('li');
+    emptyRow.className = 'empty-product-row';
+    emptyRow.textContent = 'Nenhuma seção criada';
+    sectionList.appendChild(emptyRow);
+    return;
+  }
+
+  for (const section of visibleSections) {
+    const clone = sectionTemplate.content.cloneNode(true);
+    const productNames = getProductNames();
+    const sectionProducts = getSectionProductNames(section);
+
+    clone.querySelector('.section-name').textContent = section.name;
+    clone.querySelector('.section-count').textContent = `${sectionProducts.length} produto${sectionProducts.length === 1 ? '' : 's'}`;
+
+    const productSelect = clone.querySelector('.section-product-select');
+    renderSectionProductOptions(productSelect, productNames, section);
+
+    clone.querySelector('.section-add-existing-button')
+      .addEventListener('click', () => addExistingProductToSection(section.id, productSelect.value));
+
+    const newProductInput = clone.querySelector('.section-new-product-input');
+    clone.querySelector('.section-create-product-button')
+      .addEventListener('click', () => createProductInsideSection(section.id, newProductInput));
+
+    clone.querySelector('.delete-section-button')
+      .addEventListener('click', () => deleteSection(section.id));
+
+    const productList = clone.querySelector('.section-product-list');
+    renderSectionProductList(productList, section, sectionProducts);
+    sectionList.appendChild(clone);
+  }
+}
+
+function getSections() {
+  return sections
+    .map(section => normalizeSection(section, deletedProductKeys))
+    .filter(section => section && !deletedSectionIds.has(section.id))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+}
+
+function renderSectionProductOptions(select, productNames, section) {
+  select.innerHTML = '';
+  const sectionProductKeys = new Set(section.productKeys || []);
+  const availableProducts = productNames.filter(productName => !sectionProductKeys.has(getProductKey(productName)));
+
+  if (availableProducts.length === 0) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'Nenhum produto disponível';
+    select.appendChild(option);
+    select.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  for (const productName of availableProducts) {
+    const option = document.createElement('option');
+    option.value = getProductKey(productName);
+    option.textContent = productName;
+    select.appendChild(option);
+  }
+}
+
+function renderSectionProductList(list, section, productNames) {
+  list.innerHTML = '';
+
+  if (productNames.length === 0) {
+    const emptyItem = document.createElement('li');
+    emptyItem.className = 'empty-product-row';
+    emptyItem.textContent = 'Nenhum produto nesta seção';
+    list.appendChild(emptyItem);
+    return;
+  }
+
+  for (const productName of productNames) {
+    const row = document.createElement('li');
+    row.className = 'section-product-row';
+
+    const nameEl = document.createElement('strong');
+    nameEl.textContent = productName;
+
+    const actions = document.createElement('div');
+    actions.className = 'section-product-actions';
+
+    const addValidityButton = document.createElement('button');
+    addValidityButton.type = 'button';
+    addValidityButton.className = 'section-action-button primary';
+    addValidityButton.textContent = 'Adicionar validade';
+    addValidityButton.addEventListener('click', () => selectProductForNewValidity(productName));
+
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'section-action-button danger';
+    removeButton.textContent = 'Remover';
+    removeButton.addEventListener('click', () => removeProductFromSection(section.id, productName));
+
+    actions.appendChild(addValidityButton);
+    actions.appendChild(removeButton);
+    row.appendChild(nameEl);
+    row.appendChild(actions);
+    list.appendChild(row);
+  }
+}
+
+function getSectionProductNames(section) {
+  return [...new Set(section.productKeys || [])]
+    .map(productKey => getProductNameByKey(productKey))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+function getProductNameByKey(productKey) {
+  return getProductNames().find(productName => getProductKey(productName) === getProductKey(productKey || '')) || null;
+}
+
+function addExistingProductToSection(sectionId, productKey) {
+  if (!productKey) {
+    showToast('Escolha um produto para adicionar.', 'error');
+    return;
+  }
+
+  const productName = getProductNameByKey(productKey);
+  if (!productName) {
+    showToast('Produto não encontrado.', 'error');
+    return;
+  }
+
+  addProductKeyToSection(sectionId, getProductKey(productName), `Produto "${productName}" adicionado à seção`);
+}
+
+function createProductInsideSection(sectionId, input) {
+  const productName = normalizeProductName(input.value);
+  if (!productName) {
+    showToast('Informe o nome do produto.', 'error');
+    return;
+  }
+
+  const finalProductName = ensureProduct(getExistingProductName(productName) || productName);
+  renderProductSuggestions();
+  if (!productsSection.classList.contains('hidden')) {
+    renderProductManagement();
+  }
+  addProductKeyToSection(sectionId, getProductKey(finalProductName), `Produto "${finalProductName}" criado na seção`);
+  input.value = '';
+}
+
+function addProductKeyToSection(sectionId, productKey, historyText) {
+  const section = sections.find(entry => entry.id === sectionId);
+  if (!section || deletedSectionIds.has(sectionId)) return;
+  const normalizedProductKey = getProductKey(productKey || '');
+  if (!normalizedProductKey) return;
+
+  const currentSection = normalizeSection(section, deletedProductKeys);
+  const productKeys = new Set(currentSection?.productKeys || []);
+  if (productKeys.has(normalizedProductKey)) {
+    showToast('Produto já está nesta seção.', 'error');
+    return;
+  }
+
+  const now = new Date().toISOString();
+  productKeys.add(normalizedProductKey);
+
+  sections = sections.map(entry => entry.id === sectionId
+    ? {
+      ...entry,
+      productKeys: [...productKeys],
+      productKeyChanges: mergeSectionProductChanges(entry.productKeyChanges, {
+        [normalizedProductKey]: { status: 'added', timestamp: now },
+      }),
+      updatedAt: now,
+    }
+    : entry);
+
+  saveSections();
+  renderSections();
+  addHistoryEntry(`${historyText} "${section.name}" por ${currentUserData.username}`);
+  showToast('Seção atualizada. Sincronizando...', 'success');
+}
+
+function removeProductFromSection(sectionId, productName) {
+  const section = sections.find(entry => entry.id === sectionId);
+  if (!section) return;
+
+  const productKey = getProductKey(productName);
+  const now = new Date().toISOString();
+  sections = sections.map(entry => entry.id === sectionId
+    ? {
+      ...entry,
+      productKeys: (entry.productKeys || []).filter(entryKey => getProductKey(entryKey) !== productKey),
+      productKeyChanges: mergeSectionProductChanges(entry.productKeyChanges, {
+        [productKey]: { status: 'removed', timestamp: now },
+      }),
+      updatedAt: now,
+    }
+    : entry);
+
+  saveSections();
+  renderSections();
+  addHistoryEntry(`Produto "${productName}" removido da seção "${section.name}" por ${currentUserData.username}`);
+  showToast('Produto removido da seção. Sincronizando...', 'success');
+}
+
+function replaceProductKeyInSections(oldProductKey, newProductKey) {
+  const normalizedOldKey = getProductKey(oldProductKey || '');
+  const normalizedNewKey = getProductKey(newProductKey || '');
+  if (!normalizedOldKey || !normalizedNewKey || normalizedOldKey === normalizedNewKey) return false;
+
+  let changed = false;
+  const now = new Date().toISOString();
+
+  sections = sections.map(section => {
+    const normalizedSection = normalizeSection(section, deletedProductKeys);
+    if (!normalizedSection?.productKeys.includes(normalizedOldKey)) return section;
+
+    changed = true;
+    const productKeys = new Set(normalizedSection.productKeys);
+    productKeys.delete(normalizedOldKey);
+    productKeys.add(normalizedNewKey);
+
+    return {
+      ...section,
+      productKeys: [...productKeys],
+      productKeyChanges: mergeSectionProductChanges(section.productKeyChanges, {
+        [normalizedOldKey]: { status: 'removed', timestamp: now },
+        [normalizedNewKey]: { status: 'added', timestamp: now },
+      }),
+      updatedAt: now,
+    };
+  });
+
+  return changed;
+}
+
+function removeProductKeyFromSections(productKey) {
+  const normalizedProductKey = getProductKey(productKey || '');
+  if (!normalizedProductKey) return false;
+
+  let changed = false;
+  const now = new Date().toISOString();
+
+  sections = sections.map(section => {
+    const normalizedSection = normalizeSection(section, deletedProductKeys);
+    if (!normalizedSection?.productKeys.includes(normalizedProductKey)) return section;
+
+    changed = true;
+    return {
+      ...section,
+      productKeys: normalizedSection.productKeys.filter(entryKey => entryKey !== normalizedProductKey),
+      productKeyChanges: mergeSectionProductChanges(section.productKeyChanges, {
+        [normalizedProductKey]: { status: 'removed', timestamp: now },
+      }),
+      updatedAt: now,
+    };
+  });
+
+  return changed;
+}
+
+function deleteSection(sectionId) {
+  const section = sections.find(entry => entry.id === sectionId);
+  if (!section) return;
+  if (!confirm(`Excluir a seção "${section.name}"? Os produtos e validades serão mantidos.`)) return;
+
+  deletedSectionIds.add(sectionId);
+  sections = sections.filter(entry => entry.id !== sectionId);
+  saveDeletedState();
+  saveSections();
+  renderSections();
+  addHistoryEntry(`Seção "${section.name}" excluída por ${currentUserData.username}`);
+  showToast('Seção excluída. Sincronizando...', 'success');
 }
 
 function cleanupOldHistory() {
@@ -1938,6 +2391,7 @@ function editProduct(productName) {
   const oldProductKey = getProductKey(productName);
   const existingName = getExistingProductName(newName);
   const finalName = existingName || newName;
+  const sectionChanged = replaceProductKeyInSections(oldProductKey, getProductKey(finalName));
 
   products = products
     .filter(product => getProductKey(product) !== oldProductKey)
@@ -1956,9 +2410,13 @@ function editProduct(productName) {
 
   saveDeletedState();
   saveProducts();
+  if (sectionChanged) saveSections();
   saveItems();
   renderProductSuggestions();
   renderItems();
+  if (!sectionsSection.classList.contains('hidden')) {
+    renderSections();
+  }
   renderProductManagement();
   addHistoryEntry(`Produto "${productName}" renomeado para "${finalName}" por ${currentUserData.username}`);
 }
@@ -1974,6 +2432,7 @@ function deleteProduct(productName) {
 
   if (!confirm(message)) return;
 
+  const sectionChanged = removeProductKeyFromSections(productKey);
   deletedProductKeys.add(productKey);
   restoredProductKeys.delete(productKey);
   markProductChanged(productKey, 'deleted');
@@ -1986,9 +2445,13 @@ function deleteProduct(productName) {
 
   saveDeletedState();
   saveProducts();
+  if (sectionChanged) saveSections();
   saveItems();
   renderProductSuggestions();
   renderItems();
+  if (!sectionsSection.classList.contains('hidden')) {
+    renderSections();
+  }
   renderProductManagement();
   addHistoryEntry(`Produto "${productName}" excluído totalmente por ${currentUserData.username}`);
 }
