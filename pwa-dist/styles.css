@@ -955,6 +955,10 @@ input[readonly] {
   color: #86efac;
 }
 
+.sync-status.error {
+  color: #fca5a5;
+}
+
 .settings-button {
   width: 44px;
   height: 44px;

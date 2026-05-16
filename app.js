@@ -11,7 +11,7 @@ const SYNC_SERVER_KEY = 'validadeApp.syncServer';
 const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
 const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
 const SYNC_INTERVAL_MS = 5000;
-const APP_VERSION = '20260515-17';
+const APP_VERSION = '20260515-18';
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -79,6 +79,8 @@ let serverSyncAvailable = false;
 let isApplyingRemoteState = false;
 let isSyncingWithServer = false;
 let pendingSharedSave = false;
+let hasPendingLocalChanges = false;
+let lastSyncError = '';
 let syncDeniedForSession = false;
 let syncIntervalId = null;
 let syncSaveTimeoutId = null;
@@ -588,12 +590,29 @@ function updateSyncStatus(message) {
 
   syncStatus.textContent = message || getSyncStatusText();
   syncStatus.classList.toggle('online', serverSyncAvailable);
+  syncStatus.classList.toggle('error', Boolean(lastSyncError));
 }
 
 function getSyncStatusText() {
+  if (lastSyncError) return `Sync falhou: ${lastSyncError}`;
+  if (hasPendingLocalChanges) return 'Sync pendente';
   if (serverSyncAvailable) return `Sync online: ${getSyncLabel()}`;
   if (hasSupabaseSync() && !isSyncAuthorized()) return 'Sync aguardando autorização';
   return 'Sync offline';
+}
+
+function clearSyncError() {
+  lastSyncError = '';
+}
+
+function setSyncError(error) {
+  lastSyncError = simplifySyncError(error);
+  updateSyncStatus();
+}
+
+function simplifySyncError(error) {
+  const message = error instanceof Error ? error.message : String(error || 'erro desconhecido');
+  return message.replace(/^Error:\s*/i, '').slice(0, 80);
 }
 
 async function handleConfigureSync() {
@@ -645,6 +664,9 @@ function handleDiagnoseSync() {
   const lines = [
     `Versão: ${APP_VERSION}`,
     `Status: ${getSyncStatusText()}`,
+    `Autorizado: ${isSyncAuthorized() ? 'sim' : 'não'}`,
+    `Alterações pendentes: ${hasPendingLocalChanges ? 'sim' : 'não'}`,
+    `Último erro: ${lastSyncError || 'nenhum'}`,
     `Produtos neste aparelho: ${productList.length}`,
     '',
     ...productList.map((productName, index) => `${index + 1}. ${productName}`),
@@ -662,6 +684,8 @@ function normalizeServerState(serverState) {
       history: [],
       deletedItemIds: [],
       deletedProductKeys: [],
+      restoredProductKeys: [],
+      productChanges: {},
     };
   }
 
@@ -704,14 +728,24 @@ function mergeById(serverEntries = [], localEntries = [], deletedIds = new Set()
   }
 
   for (const entry of localEntries) {
-    if (entry && entry.id && !deletedIds.has(entry.id)) merged.set(entry.id, entry);
+    if (!entry || !entry.id || deletedIds.has(entry.id)) continue;
+    const existing = merged.get(entry.id);
+    if (!existing || getEntryTimestamp(entry) >= getEntryTimestamp(existing)) {
+      merged.set(entry.id, entry);
+    }
   }
 
   return [...merged.values()];
 }
 
+function getEntryTimestamp(entry) {
+  const timestamps = [entry.updatedAt, entry.soldDate, entry.timestamp, entry.createdAt, entry.id]
+    .map(value => Date.parse(value) || Number(value) || 0);
+  return Math.max(...timestamps, 0);
+}
+
 function mergeItems(serverItems = [], localItems = [], deletedIds = new Set(), deletedProducts = new Set()) {
-  const mergedBySignature = new Map();
+  const mergedItems = [];
 
   for (const item of mergeById(serverItems, localItems, deletedIds)) {
     if (!item || !item.id) continue;
@@ -727,15 +761,10 @@ function mergeItems(serverItems = [], localItems = [], deletedIds = new Set(), d
       quantityUnit: normalizeQuantityUnit(item.quantityUnit),
       sold: Boolean(item.sold),
     };
-    const signature = getItemSignature(normalizedItem);
-    const existing = mergedBySignature.get(signature);
-
-    if (!existing || getItemTimestamp(normalizedItem) >= getItemTimestamp(existing)) {
-      mergedBySignature.set(signature, normalizedItem);
-    }
+    mergedItems.push(normalizedItem);
   }
 
-  return [...mergedBySignature.values()];
+  return mergedItems;
 }
 
 function getItemSignature(item) {
@@ -750,9 +779,7 @@ function getItemSignature(item) {
 }
 
 function getItemTimestamp(item) {
-  const timestamps = [item.updatedAt, item.soldDate, item.createdAt, item.id]
-    .map(value => Date.parse(value) || Number(value) || 0);
-  return Math.max(...timestamps, 0);
+  return getEntryTimestamp(item);
 }
 
 function mergeProducts(serverProducts = [], localProducts = [], deletedProducts = new Set()) {
@@ -911,11 +938,14 @@ async function syncWithServer(options = {}) {
     if (options.force || hasUsefulState(mergedState)) {
       applyState(mergedState);
       await postRemoteState(getAppState());
+      hasPendingLocalChanges = false;
+      clearSyncError();
       refreshCurrentView();
+      updateSyncStatus();
     }
-  } catch {
+  } catch (error) {
     serverSyncAvailable = false;
-    updateSyncStatus();
+    setSyncError(error);
   } finally {
     isSyncingWithServer = false;
 
@@ -928,6 +958,11 @@ async function syncWithServer(options = {}) {
 
 function scheduleSharedStateSave() {
   if (isApplyingRemoteState) return;
+  hasPendingLocalChanges = true;
+  if (!isSyncAuthorized()) {
+    updateSyncStatus();
+    return;
+  }
   if (!serverSyncAvailable && !hasSupabaseSync()) return;
 
   if (syncSaveTimeoutId) {
@@ -942,6 +977,7 @@ function scheduleSharedStateSave() {
 
 async function saveSharedState() {
   if (isApplyingRemoteState) return;
+  if (!isSyncAuthorized()) return;
   if (!serverSyncAvailable && !hasSupabaseSync()) return;
 
   if (isSyncingWithServer) {
@@ -959,10 +995,13 @@ async function saveSharedState() {
     serverSyncAvailable = true;
     applyState(mergedState);
     await postRemoteState(getAppState());
+    hasPendingLocalChanges = false;
+    clearSyncError();
     refreshCurrentView();
-  } catch {
-    serverSyncAvailable = false;
     updateSyncStatus();
+  } catch (error) {
+    serverSyncAvailable = false;
+    setSyncError(error);
   } finally {
     isSyncingWithServer = false;
 
@@ -991,7 +1030,7 @@ async function postRemoteState(state) {
 
 async function fetchLocalServerState() {
   const response = await fetch(getStateUrl(getDefaultSyncServer()), { cache: 'no-store' });
-  if (!response.ok) return null;
+  if (!response.ok) throw new Error(`Servidor local ${response.status}`);
   return response.json();
 }
 
@@ -1003,17 +1042,12 @@ async function postLocalServerState(state) {
       body: JSON.stringify(state),
     });
 
-    if (!response.ok) {
-      serverSyncAvailable = false;
-      updateSyncStatus();
-      return false;
-    }
+    if (!response.ok) throw new Error(`Servidor local ${response.status}`);
 
     return true;
-  } catch {
+  } catch (error) {
     serverSyncAvailable = false;
-    updateSyncStatus();
-    return false;
+    throw error;
   }
 }
 
@@ -1039,7 +1073,7 @@ async function fetchSupabaseState() {
     cache: 'no-store',
   });
 
-  if (!response.ok) return null;
+  if (!response.ok) throw new Error(`Supabase leitura ${response.status}`);
 
   const rows = await response.json();
   return normalizeServerState(rows[0]?.state || {});
@@ -1061,13 +1095,13 @@ async function postSupabaseState(state) {
       }),
     });
 
-    serverSyncAvailable = response.ok;
-    updateSyncStatus();
-    return response.ok;
-  } catch {
+    if (!response.ok) throw new Error(`Supabase gravação ${response.status}`);
+
+    serverSyncAvailable = true;
+    return true;
+  } catch (error) {
     serverSyncAvailable = false;
-    updateSyncStatus();
-    return false;
+    throw error;
   }
 }
 
@@ -1326,13 +1360,24 @@ function getDaysSinceSold(item) {
 
 function cleanupOldSoldItems() {
   const originalCount = items.length;
-  items = items.filter(item => {
-    if (!item.sold || !item.soldDate) return true;
+  const nextItems = [];
+  for (const item of items) {
+    if (!item.sold || !item.soldDate) {
+      nextItems.push(item);
+      continue;
+    }
     const daysSinceSold = getDaysSinceSold(item);
-    return daysSinceSold !== null && daysSinceSold <= 30;
-  });
+    if (daysSinceSold !== null && daysSinceSold <= 30) {
+      nextItems.push(item);
+    } else {
+      deletedItemIds.add(item.id);
+    }
+  }
+
+  items = nextItems;
 
   if (items.length !== originalCount) {
+    saveDeletedState();
     saveItems();
   }
 }
