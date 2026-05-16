@@ -16,7 +16,7 @@ const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
 const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
 const SYNC_INTERVAL_MS = 5000;
 const SYNC_MAX_ATTEMPTS = 4;
-const APP_VERSION = '20260515-21';
+const APP_VERSION = '20260515-22';
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -2043,20 +2043,21 @@ function renderMonthlySheet() {
 
   for (const productName of getProductNames()) {
     const productItems = (activeItemsByProduct.get(productName) || [])
-      .sort((a, b) => getDaysRemaining(a.date) - getDaysRemaining(b.date))
-      .slice(0, 4);
+      .sort((a, b) => getDaysRemaining(a.date) - getDaysRemaining(b.date));
+    const visibleProductItems = productItems.slice(0, 4);
 
     const row = document.createElement('tr');
     appendSheetCell(row, productName, 'sheet-product-cell');
 
     for (let index = 0; index < 4; index += 1) {
-      const item = productItems[index];
+      const item = visibleProductItems[index];
       if (item) {
-        appendSheetCell(row, formatDate(item.date));
+        const status = getStatus(item, getDaysRemaining(item.date));
+        appendSheetCell(row, formatDate(item.date), 'sheet-date-cell');
         appendSheetCell(row, formatQuantity(item.quantity, item.quantityUnit), 'sheet-quantity-cell');
-        appendSheetCell(row, '', 'sheet-status-cell');
+        appendSheetCell(row, status.label, `sheet-status-cell sheet-status-${status.css}`);
       } else {
-        appendSheetCell(row, '');
+        appendSheetCell(row, '', 'sheet-date-cell');
         appendSheetCell(row, '', 'sheet-quantity-cell');
         appendSheetCell(row, '', 'sheet-status-cell');
       }
@@ -2068,6 +2069,10 @@ function renderMonthlySheet() {
 }
 
 function getSheetNotes(productItems) {
+  if (productItems.length === 0) {
+    return 'Sem validade ativa';
+  }
+
   const notes = [];
 
   for (const item of productItems) {
@@ -2084,7 +2089,15 @@ function getSheetNotes(productItems) {
     }
   }
 
-  return notes.join(' | ');
+  const extraItems = productItems.slice(4);
+  if (extraItems.length > 0) {
+    const extraText = extraItems
+      .map(item => `${formatDate(item.date)} (${formatQuantity(item.quantity, item.quantityUnit)})`)
+      .join(', ');
+    notes.push(`Outras validades: ${extraText}`);
+  }
+
+  return notes.length > 0 ? notes.join(' | ') : 'Em dia';
 }
 
 function appendSheetCell(row, value, className = '') {
