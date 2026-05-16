@@ -4,14 +4,17 @@ const USERS_KEY = 'validadeApp.users';
 const HISTORY_KEY = 'validadeApp.history';
 const DELETED_ITEMS_KEY = 'validadeApp.deletedItems';
 const DELETED_PRODUCTS_KEY = 'validadeApp.deletedProducts';
+const DELETED_USERS_KEY = 'validadeApp.deletedUsers';
 const RESTORED_PRODUCTS_KEY = 'validadeApp.restoredProducts';
 const PRODUCT_CHANGES_KEY = 'validadeApp.productChanges';
+const LAST_SYNC_AT_KEY = 'validadeApp.lastSyncAt';
 const CURRENT_USER_KEY = 'validadeApp.currentUser';
 const SYNC_SERVER_KEY = 'validadeApp.syncServer';
 const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
 const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
 const SYNC_INTERVAL_MS = 5000;
-const APP_VERSION = '20260515-19';
+const SYNC_MAX_ATTEMPTS = 4;
+const APP_VERSION = '20260515-20';
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -42,6 +45,7 @@ const currentUser = document.getElementById('currentUser');
 const settingsButton = document.getElementById('settingsButton');
 const settingsMenu = document.getElementById('settingsMenu');
 const syncStatus = document.getElementById('syncStatus');
+const lastSyncInfo = document.getElementById('lastSyncInfo');
 const syncNowButton = document.getElementById('syncNowButton');
 const diagnoseSyncButton = document.getElementById('diagnoseSyncButton');
 const configureSyncButton = document.getElementById('configureSyncButton');
@@ -66,6 +70,7 @@ const printSheetButton = document.getElementById('printSheetButton');
 
 const itemTemplate = document.getElementById('itemTemplate');
 const userTemplate = document.getElementById('userTemplate');
+const toastContainer = document.getElementById('toastContainer');
 
 let items = loadItems();
 let products = loadProducts();
@@ -73,6 +78,7 @@ let users = loadUsers();
 let history = loadHistory();
 let deletedItemIds = loadDeletedSet(DELETED_ITEMS_KEY);
 let deletedProductKeys = loadDeletedSet(DELETED_PRODUCTS_KEY);
+let deletedUserIds = loadDeletedSet(DELETED_USERS_KEY);
 let restoredProductKeys = loadDeletedSet(RESTORED_PRODUCTS_KEY);
 let productChanges = loadProductChanges();
 let currentUserData = null;
@@ -83,6 +89,7 @@ let isSyncingWithServer = false;
 let pendingSharedSave = false;
 let hasPendingLocalChanges = false;
 let lastSyncError = '';
+let lastSyncAt = localStorage.getItem(LAST_SYNC_AT_KEY) || '';
 let syncDeniedForSession = false;
 let syncIntervalId = null;
 let syncSaveTimeoutId = null;
@@ -315,7 +322,7 @@ function handleCreateUser(event) {
   const type = document.getElementById('newUserType').value;
 
   if (users.some(u => u.username === username)) {
-    alert('Usuário já existe');
+    showToast('Usuário já existe.', 'error');
     return;
   }
 
@@ -327,6 +334,7 @@ function handleCreateUser(event) {
   };
 
   users.push(newUser);
+  deletedUserIds.delete(newUser.id);
   saveUsers();
 
   document.getElementById('newUsername').value = '';
@@ -335,6 +343,7 @@ function handleCreateUser(event) {
 
   renderUsers();
   addHistoryEntry(`Usuário ${username} criado por ${currentUserData.username}`);
+  showToast('Usuário criado. Sincronizando...', 'success');
 }
 
 function handleClearAll() {
@@ -515,6 +524,7 @@ function loadProductChanges() {
 function saveDeletedState() {
   localStorage.setItem(DELETED_ITEMS_KEY, JSON.stringify([...deletedItemIds]));
   localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify([...deletedProductKeys]));
+  localStorage.setItem(DELETED_USERS_KEY, JSON.stringify([...deletedUserIds]));
   localStorage.setItem(RESTORED_PRODUCTS_KEY, JSON.stringify([...restoredProductKeys]));
   localStorage.setItem(PRODUCT_CHANGES_KEY, JSON.stringify(productChanges));
   scheduleSharedStateSave();
@@ -528,6 +538,7 @@ function getAppState() {
     history,
     deletedItemIds: [...deletedItemIds],
     deletedProductKeys: [...deletedProductKeys],
+    deletedUserIds: [...deletedUserIds],
     restoredProductKeys: [...restoredProductKeys],
     productChanges,
   };
@@ -599,6 +610,10 @@ function updateSyncStatus(message) {
   syncStatus.textContent = message || getSyncStatusText();
   syncStatus.classList.toggle('online', serverSyncAvailable);
   syncStatus.classList.toggle('error', Boolean(lastSyncError));
+
+  if (lastSyncInfo) {
+    lastSyncInfo.textContent = getLastSyncStatusText();
+  }
 }
 
 function getSyncStatusText() {
@@ -621,6 +636,23 @@ function setSyncError(error) {
 function simplifySyncError(error) {
   const message = error instanceof Error ? error.message : String(error || 'erro desconhecido');
   return message.replace(/^Error:\s*/i, '').slice(0, 80);
+}
+
+function getLastSyncStatusText() {
+  if (!lastSyncAt) return 'Última sync: nunca';
+  return `Última sync: ${new Date(lastSyncAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function markSyncSuccess() {
+  lastSyncAt = new Date().toISOString();
+  localStorage.setItem(LAST_SYNC_AT_KEY, lastSyncAt);
+}
+
+class SyncConflictError extends Error {
+  constructor(message = 'estado remoto mudou; tentando novamente') {
+    super(message);
+    this.name = 'SyncConflictError';
+  }
 }
 
 async function handleConfigureSync() {
@@ -674,6 +706,7 @@ function handleDiagnoseSync() {
     `Status: ${getSyncStatusText()}`,
     `Autorizado: ${isSyncAuthorized() ? 'sim' : 'não'}`,
     `Alterações pendentes: ${hasPendingLocalChanges ? 'sim' : 'não'}`,
+    `Última sync: ${lastSyncAt ? new Date(lastSyncAt).toLocaleString('pt-BR') : 'nunca'}`,
     `Último erro: ${lastSyncError || 'nenhum'}`,
     `Produtos neste aparelho: ${productList.length}`,
     '',
@@ -681,6 +714,23 @@ function handleDiagnoseSync() {
   ];
 
   alert(lines.join('\n'));
+}
+
+function showToast(message, type = 'info') {
+  if (!toastContainer) {
+    alert(message);
+    return;
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add('leaving');
+    setTimeout(() => toast.remove(), 240);
+  }, 2600);
 }
 
 function normalizeServerState(serverState) {
@@ -692,6 +742,7 @@ function normalizeServerState(serverState) {
       history: [],
       deletedItemIds: [],
       deletedProductKeys: [],
+      deletedUserIds: [],
       restoredProductKeys: [],
       productChanges: {},
     };
@@ -704,6 +755,7 @@ function normalizeServerState(serverState) {
     history: Array.isArray(serverState.history) ? serverState.history : [],
     deletedItemIds: Array.isArray(serverState.deletedItemIds) ? serverState.deletedItemIds : [],
     deletedProductKeys: Array.isArray(serverState.deletedProductKeys) ? serverState.deletedProductKeys : [],
+    deletedUserIds: Array.isArray(serverState.deletedUserIds) ? serverState.deletedUserIds : [],
     restoredProductKeys: Array.isArray(serverState.restoredProductKeys) ? serverState.restoredProductKeys : [],
     productChanges: serverState.productChanges && typeof serverState.productChanges === 'object' ? serverState.productChanges : {},
   };
@@ -716,6 +768,7 @@ function persistLocalState() {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
   localStorage.setItem(DELETED_ITEMS_KEY, JSON.stringify([...deletedItemIds]));
   localStorage.setItem(DELETED_PRODUCTS_KEY, JSON.stringify([...deletedProductKeys]));
+  localStorage.setItem(DELETED_USERS_KEY, JSON.stringify([...deletedUserIds]));
   localStorage.setItem(RESTORED_PRODUCTS_KEY, JSON.stringify([...restoredProductKeys]));
   localStorage.setItem(PRODUCT_CHANGES_KEY, JSON.stringify(productChanges));
 }
@@ -775,21 +828,6 @@ function mergeItems(serverItems = [], localItems = [], deletedIds = new Set(), d
   return mergedItems;
 }
 
-function getItemSignature(item) {
-  return [
-    getProductKey(item.name || ''),
-    item.date || '',
-    String(normalizeQuantity(item.quantity)),
-    normalizeQuantityUnit(item.quantityUnit),
-    item.sold ? 'sold' : 'active',
-    item.soldDate || '',
-  ].join('|');
-}
-
-function getItemTimestamp(item) {
-  return getEntryTimestamp(item);
-}
-
 function mergeProducts(serverProducts = [], localProducts = [], deletedProducts = new Set()) {
   const merged = new Map();
 
@@ -836,6 +874,7 @@ function markProductChanged(productKey, status) {
 function mergeStates(serverState, localState) {
   const mergedDeletedItemIds = mergeDeletedSet(serverState.deletedItemIds, localState.deletedItemIds);
   const mergedDeletedProductKeys = mergeDeletedSet(serverState.deletedProductKeys, localState.deletedProductKeys);
+  const mergedDeletedUserIds = mergeDeletedSet(serverState.deletedUserIds, localState.deletedUserIds);
   const mergedProductChanges = mergeProductChanges(serverState.productChanges, localState.productChanges);
 
   for (const [productKey, change] of Object.entries(mergedProductChanges)) {
@@ -856,10 +895,11 @@ function mergeStates(serverState, localState) {
       mergedItems.map(item => item.name),
       mergedDeletedProductKeys
     ),
-    users: mergeById(serverState.users, localState.users),
+    users: mergeById(serverState.users, localState.users, mergedDeletedUserIds),
     history: mergeById(serverState.history, localState.history),
     deletedItemIds: [...mergedDeletedItemIds],
     deletedProductKeys: [...mergedDeletedProductKeys],
+    deletedUserIds: [...mergedDeletedUserIds],
     restoredProductKeys: Array.from(new Set([...(serverState.restoredProductKeys || []), ...(localState.restoredProductKeys || [])])),
     productChanges: mergedProductChanges,
   };
@@ -873,6 +913,7 @@ function applyState(state) {
   history = Array.isArray(state.history) ? state.history : [];
   deletedItemIds = new Set(Array.isArray(state.deletedItemIds) ? state.deletedItemIds : []);
   deletedProductKeys = new Set(Array.isArray(state.deletedProductKeys) ? state.deletedProductKeys : []);
+  deletedUserIds = new Set(Array.isArray(state.deletedUserIds) ? state.deletedUserIds : []);
   restoredProductKeys = new Set(Array.isArray(state.restoredProductKeys) ? state.restoredProductKeys : []);
   productChanges = state.productChanges && typeof state.productChanges === 'object' ? state.productChanges : {};
   rebuildProductCatalog();
@@ -935,22 +976,7 @@ async function syncWithServer(options = {}) {
   isSyncingWithServer = true;
 
   try {
-    const rawServerState = await fetchRemoteState();
-    const serverState = normalizeServerState(rawServerState);
-
-    serverSyncAvailable = true;
-    updateSyncStatus();
-    const localState = getAppState();
-    const mergedState = mergeStates(serverState, localState);
-
-    if (options.force || hasUsefulState(mergedState)) {
-      applyState(mergedState);
-      await postRemoteState(getAppState());
-      hasPendingLocalChanges = false;
-      clearSyncError();
-      refreshCurrentView();
-      updateSyncStatus();
-    }
+    await syncRemoteState({ force: Boolean(options.force) });
   } catch (error) {
     serverSyncAvailable = false;
     setSyncError(error);
@@ -996,17 +1022,7 @@ async function saveSharedState() {
   isSyncingWithServer = true;
 
   try {
-    const rawServerState = await fetchRemoteState();
-    const serverState = normalizeServerState(rawServerState);
-    const mergedState = mergeStates(serverState, getAppState());
-
-    serverSyncAvailable = true;
-    applyState(mergedState);
-    await postRemoteState(getAppState());
-    hasPendingLocalChanges = false;
-    clearSyncError();
-    refreshCurrentView();
-    updateSyncStatus();
+    await syncRemoteState({ force: false });
   } catch (error) {
     serverSyncAvailable = false;
     setSyncError(error);
@@ -1020,20 +1036,72 @@ async function saveSharedState() {
   }
 }
 
-async function fetchRemoteState() {
-  if (hasSupabaseSync()) {
-    return fetchSupabaseState();
+async function syncRemoteState(options = {}) {
+  let lastConflict = null;
+
+  for (let attempt = 1; attempt <= SYNC_MAX_ATTEMPTS; attempt += 1) {
+    const remoteSnapshot = await fetchRemoteSnapshot();
+    const serverState = normalizeServerState(remoteSnapshot.state);
+    const localState = getAppState();
+    const mergedState = mergeStates(serverState, localState);
+    const shouldWrite = options.force
+      || hasPendingLocalChanges
+      || !areStatesEqual(serverState, mergedState);
+
+    serverSyncAvailable = true;
+    applyState(mergedState);
+
+    if (!shouldWrite) {
+      clearSyncError();
+      markSyncSuccess();
+      refreshCurrentView();
+      updateSyncStatus();
+      return;
+    }
+
+    try {
+      await postRemoteState(getAppState(), remoteSnapshot.version);
+      hasPendingLocalChanges = false;
+      clearSyncError();
+      markSyncSuccess();
+      refreshCurrentView();
+      updateSyncStatus();
+      return;
+    } catch (error) {
+      if (!(error instanceof SyncConflictError)) throw error;
+      lastConflict = error;
+    }
   }
 
-  return fetchLocalServerState();
+  throw lastConflict || new Error('sincronização concorrente não concluída');
 }
 
-async function postRemoteState(state) {
+function areStatesEqual(firstState, secondState) {
+  return JSON.stringify(normalizeServerState(firstState)) === JSON.stringify(normalizeServerState(secondState));
+}
+
+async function fetchRemoteState() {
+  const snapshot = await fetchRemoteSnapshot();
+  return snapshot.state;
+}
+
+async function postRemoteState(state, expectedVersion = null) {
   if (hasSupabaseSync()) {
-    return postSupabaseState(state);
+    return postSupabaseState(state, expectedVersion);
   }
 
   return postLocalServerState(state);
+}
+
+async function fetchRemoteSnapshot() {
+  if (hasSupabaseSync()) {
+    return fetchSupabaseSnapshot();
+  }
+
+  return {
+    state: await fetchLocalServerState(),
+    version: null,
+  };
 }
 
 async function fetchLocalServerState() {
@@ -1076,7 +1144,12 @@ function getSupabaseHeaders() {
 }
 
 async function fetchSupabaseState() {
-  const response = await fetch(`${getSupabaseStateUrl()}&select=state`, {
+  const snapshot = await fetchSupabaseSnapshot();
+  return snapshot.state;
+}
+
+async function fetchSupabaseSnapshot() {
+  const response = await fetch(`${getSupabaseStateUrl()}&select=state,updated_at`, {
     headers: getSupabaseHeaders(),
     cache: 'no-store',
   });
@@ -1084,26 +1157,51 @@ async function fetchSupabaseState() {
   if (!response.ok) throw new Error(`Supabase leitura ${response.status}`);
 
   const rows = await response.json();
-  return normalizeServerState(rows[0]?.state || {});
+  return {
+    state: normalizeServerState(rows[0]?.state || {}),
+    version: rows[0]?.updated_at || null,
+  };
 }
 
-async function postSupabaseState(state) {
+async function postSupabaseState(state, expectedVersion = null) {
   try {
     const config = getSyncConfig();
-    const response = await fetch(`${config.supabaseUrl}/rest/v1/${encodeURIComponent(config.table)}?on_conflict=id`, {
-      method: 'POST',
+    const baseUrl = `${config.supabaseUrl}/rest/v1/${encodeURIComponent(config.table)}`;
+    const body = JSON.stringify({
+      id: config.rowId,
+      state,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (!expectedVersion) {
+      const insertResponse = await fetch(baseUrl, {
+        method: 'POST',
+        headers: {
+          ...getSupabaseHeaders(),
+          Prefer: 'return=representation',
+        },
+        body,
+      });
+
+      if (insertResponse.status === 409) throw new SyncConflictError();
+      if (!insertResponse.ok) throw new Error(`Supabase gravação ${insertResponse.status}`);
+
+      serverSyncAvailable = true;
+      return true;
+    }
+
+    const response = await fetch(`${getSupabaseStateUrl()}&updated_at=eq.${encodeURIComponent(expectedVersion)}`, {
+      method: 'PATCH',
       headers: {
         ...getSupabaseHeaders(),
-        Prefer: 'resolution=merge-duplicates,return=minimal',
+        Prefer: 'return=representation',
       },
-      body: JSON.stringify({
-        id: config.rowId,
-        state,
-        updated_at: new Date().toISOString(),
-      }),
+      body,
     });
 
     if (!response.ok) throw new Error(`Supabase gravação ${response.status}`);
+    const rows = await response.json();
+    if (!Array.isArray(rows) || rows.length === 0) throw new SyncConflictError();
 
     serverSyncAvailable = true;
     return true;
@@ -1354,15 +1452,16 @@ function handleSaveItem(event) {
   const quantityInput = document.getElementById('itemQuantity');
   const quantityUnitInput = document.getElementById('itemQuantityUnit');
   const typedName = normalizeProductName(nameInput.value);
-  const name = ensureProduct(getExistingProductName(typedName) || typedName);
   const date = dateInput.value;
   const quantity = Number(quantityInput.value);
   const quantityUnit = normalizeQuantityUnit(quantityUnitInput.value);
 
-  if (!name || !date || quantity <= 0) {
-    alert('Por favor, preencha todos os campos corretamente.');
+  if (!typedName || !date || quantity <= 0) {
+    showToast('Preencha produto, data e quantidade corretamente.', 'error');
     return;
   }
+
+  const name = ensureProduct(getExistingProductName(typedName) || typedName);
 
   items.push({
     id: Date.now().toString(),
@@ -1386,7 +1485,7 @@ function handleSaveItem(event) {
   // Não chamar renderItems() aqui pois estamos na aba adicionar
   addHistoryEntry(`Item "${name}" adicionado por ${currentUserData.username}`);
   
-  alert('Item adicionado com sucesso!');
+  showToast('Item salvo. Sincronizando...', 'success');
 }
 
 function formatDate(dateString) {
@@ -1738,6 +1837,7 @@ function markSold(id) {
   saveItems();
   renderItems();
   addHistoryEntry(`Item "${item.name}" marcado como vendido por ${currentUserData.username}`);
+  showToast('Saída marcada. Sincronizando...', 'success');
 }
 
 function saveQuantity(id, input, unitInput, item) {
@@ -1745,7 +1845,7 @@ function saveQuantity(id, input, unitInput, item) {
   const newQuantityUnit = normalizeQuantityUnit(unitInput.value);
   
   if (!newQuantity || newQuantity <= 0) {
-    alert('Quantidade deve ser maior que zero.');
+    showToast('Quantidade deve ser maior que zero.', 'error');
     input.value = normalizeQuantity(item.quantity);
     unitInput.value = normalizeQuantityUnit(item.quantityUnit);
     return;
@@ -1761,6 +1861,7 @@ function saveQuantity(id, input, unitInput, item) {
   saveItems();
   renderItems();
   addHistoryEntry(`Quantidade de "${item.name}" alterada para ${formatQuantity(newQuantity, newQuantityUnit)} por ${currentUserData.username}`);
+  showToast('Quantidade salva. Sincronizando...', 'success');
 }
 
 function removeItem(id) {
@@ -1772,6 +1873,7 @@ function removeItem(id) {
   renderProductSuggestions();
   renderItems();
   addHistoryEntry(`Item "${item.name}" removido por ${currentUserData.username}`);
+  showToast('Item excluído. Sincronizando...', 'success');
 }
 
 function renderProductManagement() {
@@ -1912,9 +2014,12 @@ function deleteUser(id) {
   if (!user || user.id === currentUserData.id) return;
 
   if (confirm(`Excluir usuário ${user.username}?`)) {
+    deletedUserIds.add(id);
     users = users.filter(u => u.id !== id);
+    saveDeletedState();
     saveUsers();
     renderUsers();
     addHistoryEntry(`Usuário ${user.username} excluído por ${currentUserData.username}`);
+    showToast('Usuário excluído. Sincronizando...', 'success');
   }
 }

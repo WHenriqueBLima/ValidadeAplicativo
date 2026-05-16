@@ -14,6 +14,7 @@ DEFAULT_STATE = {
     "history": [],
     "deletedItemIds": [],
     "deletedProductKeys": [],
+    "deletedUserIds": [],
     "restoredProductKeys": [],
     "productChanges": {},
 }
@@ -61,6 +62,7 @@ class ValidadeHandler(SimpleHTTPRequestHandler):
             "history": state.get("history", []),
             "deletedItemIds": state.get("deletedItemIds", []),
             "deletedProductKeys": state.get("deletedProductKeys", []),
+            "deletedUserIds": state.get("deletedUserIds", []),
             "restoredProductKeys": state.get("restoredProductKeys", []),
             "productChanges": state.get("productChanges", {}),
         }
