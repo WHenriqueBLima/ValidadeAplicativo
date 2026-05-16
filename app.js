@@ -11,7 +11,7 @@ const SYNC_SERVER_KEY = 'validadeApp.syncServer';
 const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
 const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
 const SYNC_INTERVAL_MS = 5000;
-const APP_VERSION = '20260515-18';
+const APP_VERSION = '20260515-19';
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -24,6 +24,8 @@ const createUserForm = document.getElementById('createUserForm');
 const itemList = document.getElementById('itemList');
 const userList = document.getElementById('userList');
 const productSuggestions = document.getElementById('productSuggestions');
+const productSearchResults = document.getElementById('productSearchResults');
+const productFilterInput = document.getElementById('productFilterInput');
 const selectedProductHint = document.getElementById('selectedProductHint');
 
 const totalItems = document.getElementById('totalItems');
@@ -135,6 +137,10 @@ function setupEventListeners() {
   diagnoseSyncButton.addEventListener('click', handleDiagnoseSync);
   configureSyncButton.addEventListener('click', handleConfigureSync);
   itemForm.addEventListener('submit', handleSaveItem);
+  document.getElementById('itemName').addEventListener('input', handleProductSearchInput);
+  document.getElementById('itemName').addEventListener('focus', handleProductSearchInput);
+  document.getElementById('itemName').addEventListener('blur', hideProductSearchResultsSoon);
+  productFilterInput.addEventListener('input', renderItems);
   itemDateText.addEventListener('input', handleDateTextInput);
   itemDateText.addEventListener('blur', syncDateTextToNativeInput);
   document.getElementById('itemDate').addEventListener('change', handleNativeDateChange);
@@ -440,6 +446,7 @@ function clearSelectedProductHint() {
   nameInput.readOnly = false;
   selectedProductHint.textContent = '';
   selectedProductHint.classList.add('hidden');
+  hideProductSearchResults();
 }
 
 function selectProductForNewValidity(productName) {
@@ -450,6 +457,7 @@ function selectProductForNewValidity(productName) {
   nameInput.readOnly = true;
   selectedProductHint.textContent = `Adicionando validade para: ${productName}`;
   selectedProductHint.classList.remove('hidden');
+  hideProductSearchResults();
   itemDateText.focus();
 }
 
@@ -1279,6 +1287,58 @@ function renderProductSuggestions() {
   }
 }
 
+function handleProductSearchInput(event) {
+  const input = event.currentTarget;
+  if (input.readOnly) {
+    hideProductSearchResults();
+    return;
+  }
+
+  renderProductSearchResults(input.value);
+}
+
+function renderProductSearchResults(query) {
+  const normalizedQuery = getProductKey(query || '');
+  const productNames = getProductNames()
+    .filter(productName => !normalizedQuery || getProductKey(productName).includes(normalizedQuery))
+    .slice(0, 8);
+
+  productSearchResults.innerHTML = '';
+
+  if (productNames.length === 0) {
+    productSearchResults.classList.add('hidden');
+    return;
+  }
+
+  for (const productName of productNames) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'product-search-result';
+    button.textContent = productName;
+    button.addEventListener('mousedown', event => event.preventDefault());
+    button.addEventListener('click', () => selectProductFromSearch(productName));
+    productSearchResults.appendChild(button);
+  }
+
+  productSearchResults.classList.remove('hidden');
+}
+
+function selectProductFromSearch(productName) {
+  const nameInput = document.getElementById('itemName');
+  nameInput.value = productName;
+  hideProductSearchResults();
+  itemDateText.focus();
+}
+
+function hideProductSearchResultsSoon() {
+  setTimeout(hideProductSearchResults, 120);
+}
+
+function hideProductSearchResults() {
+  productSearchResults.innerHTML = '';
+  productSearchResults.classList.add('hidden');
+}
+
 function cleanupOldHistory() {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -1489,6 +1549,7 @@ function renderItems() {
   cleanupOldSoldItems();
   renderProductSuggestions();
   itemList.innerHTML = '';
+  const productFilter = getProductKey(productFilterInput.value || '');
 
   const sorted = [...items].sort((a, b) => {
     if ((a.sold ? 1 : 0) !== (b.sold ? 1 : 0)) {
@@ -1515,6 +1576,10 @@ function renderItems() {
 
   // Create group headers
   for (const [productName, productItems] of Object.entries(grouped)) {
+    if (productFilter && !getProductKey(productName).includes(productFilter)) {
+      continue;
+    }
+
     const productGroup = document.createElement('li');
     productGroup.className = 'product-group';
     productGroup.dataset.productKey = getProductKey(productName);
@@ -1649,7 +1714,9 @@ function renderItems() {
     itemList.appendChild(productGroup);
   }
 
-  totalItems.textContent = Object.keys(grouped).length;
+  totalItems.textContent = Object.keys(grouped).filter(productName => (
+    !productFilter || getProductKey(productName).includes(productFilter)
+  )).length;
   urgentCount.textContent = urgent;
   criticalCount.textContent = critical;
   expiredCount.textContent = expired;
