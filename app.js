@@ -14,9 +14,15 @@ const CURRENT_USER_KEY = 'validadeApp.currentUser';
 const SYNC_SERVER_KEY = 'validadeApp.syncServer';
 const SYNC_CONFIG_KEY = 'validadeApp.syncConfig';
 const SYNC_AUTH_KEY = 'validadeApp.syncAuthorized.v4';
-const SYNC_INTERVAL_MS = 5000;
-const SYNC_MAX_ATTEMPTS = 4;
+const SYNC_INTERVAL_MS = 30000;
+const SYNC_DEBOUNCE_MS = 1500;
+const SYNC_MAX_ATTEMPTS = 3;
 const APP_VERSION = '20260515-22';
+const DEVICE_ID = localStorage.getItem('validadeApp.deviceId') || `device-${Date.now()}-${Math.random().toString(16).slice(2,8)}`;
+const STATE_BROADCAST_KEY = 'validadeApp.stateBroadcast';
+const CROSS_TAB_CHANNEL_NAME = 'validadeApp.crossTab';
+let crossTabChannel = null;
+localStorage.setItem('validadeApp.deviceId', DEVICE_ID);
 
 const loginScreen = document.getElementById('loginScreen');
 const appScreen = document.getElementById('appScreen');
@@ -103,6 +109,8 @@ let syncDeniedForSession = false;
 let syncIntervalId = null;
 let syncSaveTimeoutId = null;
 let expandedProductKeys = new Set();
+let lastPublishedStateHash = localStorage.getItem('validadeApp.lastPublishedStateHash') || '';
+let lastRemoteStateHash = '';
 
 // Initialize app
 initApp();
@@ -149,6 +157,12 @@ function setupEventListeners() {
   document.addEventListener('click', closeSettingsMenuOnOutsideClick);
   document.addEventListener('visibilitychange', handleVisibilitySync);
   window.addEventListener('online', handleVisibilitySync);
+  window.addEventListener('storage', handleStorageSyncEvent);
+  if ('BroadcastChannel' in window) {
+    crossTabChannel = new BroadcastChannel(CROSS_TAB_CHANNEL_NAME);
+    crossTabChannel.addEventListener('message', handleCrossTabMessage);
+    window.addEventListener('beforeunload', () => crossTabChannel?.close());
+  }
   syncNowButton.addEventListener('click', handleSyncNow);
   diagnoseSyncButton.addEventListener('click', handleDiagnoseSync);
   configureSyncButton.addEventListener('click', handleConfigureSync);
@@ -188,8 +202,47 @@ function handleVisibilitySync() {
   syncWithServer();
 }
 
+function handleStorageSyncEvent(event) {
+  if (!event.key || event.key !== STATE_BROADCAST_KEY || !event.newValue) return;
+  if (!currentUserData || !isSyncAuthorized()) return;
+
+  try {
+    const payload = JSON.parse(event.newValue);
+    if (payload.deviceId === DEVICE_ID) return;
+  } catch {
+    return;
+  }
+
+  if (!isSyncingWithServer) {
+    syncWithServer({ force: true });
+  }
+}
+
+function handleCrossTabMessage(event) {
+  const payload = event?.data;
+  if (!payload || payload.deviceId === DEVICE_ID) return;
+  if (!currentUserData || !isSyncAuthorized()) return;
+
+  if (!isSyncingWithServer) {
+    syncWithServer({ force: true });
+  }
+}
+
+function notifyCrossTabStateChange() {
+  const payload = { deviceId: DEVICE_ID, timestamp: Date.now() };
+  localStorage.setItem(STATE_BROADCAST_KEY, JSON.stringify(payload));
+  crossTabChannel?.postMessage(payload);
+}
+
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
+
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      registrations.forEach(registration => registration.unregister());
+    }).catch(() => {});
+    return;
+  }
 
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./service-worker.js').catch(() => {
@@ -455,6 +508,7 @@ function loadItems() {
 
 function saveItems() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  notifyCrossTabStateChange();
   scheduleSharedStateSave();
 }
 
@@ -499,11 +553,13 @@ function selectProductForNewValidity(productName) {
 
 function saveProducts() {
   localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+  notifyCrossTabStateChange();
   scheduleSharedStateSave();
 }
 
 function saveSections() {
   localStorage.setItem(SECTIONS_KEY, JSON.stringify(sections));
+  notifyCrossTabStateChange();
   scheduleSharedStateSave();
 }
 
@@ -518,6 +574,7 @@ function loadUsers() {
 
 function saveUsers() {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  notifyCrossTabStateChange();
   scheduleSharedStateSave();
 }
 
@@ -532,6 +589,7 @@ function loadHistory() {
 
 function saveHistory() {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  notifyCrossTabStateChange();
   scheduleSharedStateSave();
 }
 
@@ -560,6 +618,7 @@ function saveDeletedState() {
   localStorage.setItem(DELETED_USERS_KEY, JSON.stringify([...deletedUserIds]));
   localStorage.setItem(RESTORED_PRODUCTS_KEY, JSON.stringify([...restoredProductKeys]));
   localStorage.setItem(PRODUCT_CHANGES_KEY, JSON.stringify(productChanges));
+  notifyCrossTabStateChange();
   scheduleSharedStateSave();
 }
 
@@ -594,9 +653,24 @@ function getStateUrl(server) {
 function getSyncConfig() {
   const fileConfig = window.VALIDADEAPP_SYNC || {};
   const savedConfig = loadSavedSyncConfig();
-  const config = hasCompleteSupabaseConfig(fileConfig) ? fileConfig : (savedConfig || fileConfig);
+
+  const savedProvider = (savedConfig && (savedConfig.provider || '') || '').trim().toLowerCase();
+  const fileProvider = (fileConfig && (fileConfig.provider || '') || '').trim().toLowerCase();
+
+  const preferredConfig = savedProvider === 'local'
+    ? { ...fileConfig, ...savedConfig, provider: 'local' }
+    : savedProvider === 'supabase'
+      ? savedConfig
+      : savedConfig && (savedConfig.provider || savedConfig.supabaseUrl || savedConfig.supabaseAnonKey)
+        ? savedConfig
+        : fileConfig;
+
+  const config = preferredConfig || {};
+  const provider = (config.provider || '').trim().toLowerCase();
+  const resolvedProvider = provider === 'auto' ? 'local' : provider;
+
   return {
-    provider: (config.provider || '').trim().toLowerCase(),
+    provider: resolvedProvider,
     supabaseUrl: (config.supabaseUrl || '').trim().replace(/\/$/, ''),
     supabaseAnonKey: (config.supabaseAnonKey || '').trim(),
     table: (config.table || 'app_state').trim(),
@@ -814,6 +888,7 @@ function persistLocalState() {
   localStorage.setItem(DELETED_USERS_KEY, JSON.stringify([...deletedUserIds]));
   localStorage.setItem(RESTORED_PRODUCTS_KEY, JSON.stringify([...restoredProductKeys]));
   localStorage.setItem(PRODUCT_CHANGES_KEY, JSON.stringify(productChanges));
+  notifyCrossTabStateChange();
 }
 
 function hasUsefulState(state) {
@@ -1145,7 +1220,16 @@ function scheduleSharedStateSave() {
   syncSaveTimeoutId = setTimeout(() => {
     syncSaveTimeoutId = null;
     saveSharedState();
-  }, 800);
+  }, SYNC_DEBOUNCE_MS);
+}
+
+function getStateHash(state) {
+  return JSON.stringify(normalizeServerState(state));
+}
+
+function persistPublishedStateHash(state) {
+  lastPublishedStateHash = getStateHash(state);
+  localStorage.setItem('validadeApp.lastPublishedStateHash', lastPublishedStateHash);
 }
 
 async function saveSharedState() {
@@ -1183,14 +1267,30 @@ async function syncRemoteState(options = {}) {
     const serverState = normalizeServerState(remoteSnapshot.state);
     const localState = getAppState();
     const mergedState = mergeStates(serverState, localState);
-    const shouldWrite = options.force
+    const localHash = getStateHash(localState);
+    const remoteHash = getStateHash(serverState);
+    const localChangedComparedToRemote = !areStatesEqual(serverState, localState);
+    const mergedStateChanged = !areStatesEqual(serverState, mergedState);
+    const remoteHashChanged = remoteHash !== lastRemoteStateHash;
+    const writeNeeded = options.force
       || hasPendingLocalChanges
-      || !areStatesEqual(serverState, mergedState);
+      || localChangedComparedToRemote
+      || mergedStateChanged;
+    const canPublish = writeNeeded && localHash !== lastPublishedStateHash;
 
     serverSyncAvailable = true;
+    lastRemoteStateHash = remoteHash;
     applyState(mergedState);
 
-    if (!shouldWrite) {
+    if (!canPublish && !remoteHashChanged) {
+      clearSyncError();
+      markSyncSuccess();
+      refreshCurrentView();
+      updateSyncStatus();
+      return;
+    }
+
+    if (!canPublish) {
       clearSyncError();
       markSyncSuccess();
       refreshCurrentView();
@@ -1199,8 +1299,10 @@ async function syncRemoteState(options = {}) {
     }
 
     try {
-      await postRemoteState(getAppState(), remoteSnapshot.version);
+      const payload = getAppState();
+      await postRemoteState(payload, remoteSnapshot.version);
       hasPendingLocalChanges = false;
+      persistPublishedStateHash(payload);
       clearSyncError();
       markSyncSuccess();
       refreshCurrentView();
@@ -1352,7 +1454,11 @@ async function postSupabaseState(state, expectedVersion = null) {
 
 function startAutoSync() {
   if (!isSyncAuthorized() || syncIntervalId) return;
-  syncIntervalId = setInterval(syncWithServer, SYNC_INTERVAL_MS);
+  syncIntervalId = setInterval(() => {
+    if (!isSyncingWithServer) {
+      syncWithServer();
+    }
+  }, SYNC_INTERVAL_MS);
 }
 
 function stopAutoSync() {

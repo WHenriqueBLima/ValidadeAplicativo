@@ -2,6 +2,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 from datetime import datetime
+import threading
 
 
 DATA_FILE = Path(__file__).with_name("data.json")
@@ -20,6 +21,7 @@ DEFAULT_STATE = {
     "restoredProductKeys": [],
     "productChanges": {},
 }
+STATE_LOCK = threading.Lock()
 
 
 class ValidadeHandler(SimpleHTTPRequestHandler):
@@ -70,8 +72,9 @@ class ValidadeHandler(SimpleHTTPRequestHandler):
             "restoredProductKeys": state.get("restoredProductKeys", []),
             "productChanges": state.get("productChanges", {}),
         }
-        save_state(cleaned)
-        self.send_json({"ok": True})
+        with STATE_LOCK:
+            save_state(cleaned)
+        self.send_json({"ok": True, "updatedAt": datetime.now().isoformat()})
 
     def send_json(self, data):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")

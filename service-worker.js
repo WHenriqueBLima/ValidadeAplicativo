@@ -1,4 +1,4 @@
-const CACHE_NAME = 'validadeapp-v37';
+const CACHE_NAME = 'validadeapp-v38';
 const APP_SHELL = [
   './',
   './index.html',

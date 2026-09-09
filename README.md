@@ -41,6 +41,15 @@ Aplicativo móvel web para armazenar datas de validade e classificar itens por p
 - Sincronização online via Supabase quando `sync-config.js` estiver configurado
 - Persistência em `data.json` com backups automáticos na pasta `backups`
 
+## Atualizações recentes (09/2026)
+
+- Corrigida a sincronização entre abas e dispositivos em ambiente local, eliminando o problema de cache stale do service worker.
+- O app agora prioriza o modo local/servidor da própria origem em vez de manter um provedor antigo do Supabase ativo por engano.
+- A sincronização entre abas foi reforçada com eventos de mudança de estado e disparo mais eficiente quando o estado local muda.
+- O backend local foi reforçado com proteção de escrita em arquivo e backups automáticos para reduzir corrupção em sincronização concorrente.
+- A configuração de sincronização foi ajustada para funcionar sem necessidade de mexer manualmente em cada aparelho durante testes e uso em rede local.
+- A versão publicada agora está preparada para uso em GitHub Pages como frontend estático, mantendo o backend em um endereço acessível para sincronização real.
+
 ## Observação
 
 Este app funciona como um aplicativo móvel web e pode ser instalado em dispositivos que suportam PWA.
