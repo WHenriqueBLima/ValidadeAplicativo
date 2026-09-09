@@ -639,11 +639,18 @@ function getAppState() {
 }
 
 function getDefaultSyncServer() {
+  const config = getSyncConfig();
+  const configuredServer = (config.serverUrl || localStorage.getItem(SYNC_SERVER_KEY) || '').trim();
+
+  if (configuredServer) {
+    return configuredServer.replace(/\/$/, '');
+  }
+
   if (location.protocol.startsWith('http')) {
     return location.origin;
   }
 
-  return localStorage.getItem(SYNC_SERVER_KEY) || 'http://192.168.15.8:8080';
+  return 'http://192.168.15.8:8080';
 }
 
 function getStateUrl(server) {
@@ -661,7 +668,7 @@ function getSyncConfig() {
     ? { ...fileConfig, ...savedConfig, provider: 'local' }
     : savedProvider === 'supabase'
       ? savedConfig
-      : savedConfig && (savedConfig.provider || savedConfig.supabaseUrl || savedConfig.supabaseAnonKey)
+      : savedConfig && (savedConfig.provider || savedConfig.supabaseUrl || savedConfig.supabaseAnonKey || savedConfig.serverUrl)
         ? savedConfig
         : fileConfig;
 
@@ -671,6 +678,7 @@ function getSyncConfig() {
 
   return {
     provider: resolvedProvider,
+    serverUrl: (config.serverUrl || '').trim().replace(/\/$/, ''),
     supabaseUrl: (config.supabaseUrl || '').trim().replace(/\/$/, ''),
     supabaseAnonKey: (config.supabaseAnonKey || '').trim(),
     table: (config.table || 'app_state').trim(),

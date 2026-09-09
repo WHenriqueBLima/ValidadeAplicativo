@@ -70,7 +70,27 @@ Os dados ficam salvos no navegador e, quando o servidor local está ativo, tamb�
 4. No Chrome Android, use o menu `⋮` e escolha **Instalar app** ou **Adicionar à tela inicial**.
 
 A publicação estática instala o app e mantém os dados no aparelho. Para sincronizar fora da rede local, será necessário hospedar também um backend/banco de dados online.
+## Publicação externa sem mexer em cada aparelho
 
+Para deixar o app pronto para acesso público em um único passo, edite `sync-config.js` antes do build:
+
+```js
+window.VALIDADEAPP_SYNC = {
+  provider: 'local',
+  serverUrl: 'https://SEU-BACKEND-EXTERNO.com',
+  supabaseUrl: '',
+  supabaseAnonKey: '',
+  table: 'app_state',
+  rowId: 'validadeapp',
+};
+```
+
+- `provider: 'local'` faz o app apontar para um backend HTTP/HTTPS externo.
+- `serverUrl` é a URL pública do servidor que expõe `/api/state`.
+- Quando você publica o frontend em GitHub Pages, todos os dispositivos abrem o mesmo link e o app usa o mesmo `serverUrl` configurado no build.
+- Isso evita que cada aparelho precise preencher a URL manualmente.
+
+Se o objetivo for usar o Supabase em vez do backend próprio, mantenha `provider: 'supabase'` e preencha `supabaseUrl` e `supabaseAnonKey` antes de publicar.
 ## Sincronização online com Supabase
 
 1. Crie um projeto em `https://supabase.com`.
